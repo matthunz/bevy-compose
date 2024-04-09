@@ -9,12 +9,8 @@ fn ui(world: &mut World) -> impl Compose {
 
     (
         format!("High five count: {}", count),
-        button("Up high!").on_click(|world| {
-            world.resource_mut::<Count>().0 += 1;
-        }),
-        button("Down low!").on_click(|world| {
-            world.resource_mut::<Count>().0 += 1;
-        }),
+        button("Up high!").on_click(|world| world.resource_mut::<Count>().0 += 1),
+        button("Down low!").on_click(|world| world.resource_mut::<Count>().0 -= 1),
     )
 }
 

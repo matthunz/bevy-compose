@@ -28,14 +28,14 @@ pub trait Compose: Send + Sync + 'static {
 impl Compose for () {
     type State = ();
 
-    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {}
+    fn build(&mut self, _world: &mut World, _children: &mut Vec<Entity>) -> Self::State {}
 
     fn rebuild(
         &mut self,
-        target: &mut Self,
-        state: &mut Self::State,
-        world: &mut World,
-        children: &mut Vec<Entity>,
+        _target: &mut Self,
+        _state: &mut Self::State,
+        _world: &mut World,
+        _children: &mut Vec<Entity>,
     ) {
     }
 }
@@ -128,17 +128,17 @@ pub struct Button<C> {
 }
 
 impl<C> Button<C> {
-    pub fn on_click(self, handler: impl FnMut(&mut World)) -> Self {
+    pub fn on_click(self, _handler: impl FnMut(&mut World)) -> Self {
         self
     }
 }
 
 impl<C: Compose> Compose for Button<C> {
-    type State = Entity;
+    type State = (Entity, C::State);
 
     fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
         let parent_children = mem::take(children);
-        self.content.build(world, children);
+        let content_state= self.content.build(world, children);
         let my_children = mem::replace(children, parent_children);
 
         let mut entity = world.spawn(ButtonBundle {
@@ -157,7 +157,7 @@ impl<C: Compose> Compose for Button<C> {
 
         let id = entity.id();
         children.push(id);
-        id
+        (id, content_state)
     }
 
     fn rebuild(
@@ -167,6 +167,11 @@ impl<C: Compose> Compose for Button<C> {
         world: &mut World,
         children: &mut Vec<Entity>,
     ) {
+        let parent_children = mem::take(children);
+        self.content.rebuild(&mut target.content, &mut state.1, world, children);
+        let _my_children = mem::replace(children, parent_children);
+        
+        children.push(state.0);
     }
 }
 
