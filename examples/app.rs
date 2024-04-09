@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_compose::{compose, Compose, Composer};
+use bevy_compose::{button, compose, Compose, Composer};
 
 #[derive(Resource)]
 struct Count(i32);
@@ -9,7 +9,10 @@ fn ui(world: &mut World) -> impl Compose {
 
     world.resource_mut::<Count>().0 += 1;
 
-    format!("High five count: {}", count)
+    (
+        format!("High five count: {}", count),
+        button(String::from("Up high!")),
+    )
 }
 
 fn main() {
