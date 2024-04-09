@@ -37,6 +37,19 @@ impl Compose for String {
     }
 }
 
+impl<C1: Compose, C2: Compose> Compose for (C1, C2 ){
+    type State = (C1::State, C2::State);
+
+    fn build(&mut self, world: &mut World) -> Self::State {
+        (self.0.build(world), self.1.build(world))
+    }
+
+    fn rebuild(&mut self, target: &mut Self, state: &mut Self::State, world: &mut World) {
+        self.0.rebuild(&mut target.0, &mut state.0, world);
+        self.1.rebuild(&mut target.1, &mut state.1, world);
+    }
+} 
+
 pub trait AnyCompose: Send + Sync {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
@@ -65,14 +78,14 @@ impl<C: Compose> AnyCompose for C {
 
 #[derive(Component)]
 pub struct Composer {
-    compose: Option<Box<dyn FnMut() -> Box<dyn AnyCompose> + Send + Sync>>,
+    compose: Option<Box<dyn FnMut(&mut World) -> Box<dyn AnyCompose> + Send + Sync>>,
     state: Option<(Box<dyn AnyCompose>, Box<dyn Any + Send + Sync>)>,
 }
 
 impl Composer {
-    pub fn new<C: Compose>(mut compose_fn: impl FnMut() -> C + Send + Sync + 'static) -> Self {
+    pub fn new<C: Compose>(mut compose_fn: impl FnMut(&mut World) -> C + Send + Sync + 'static) -> Self {
         Self {
-            compose: Some(Box::new(move || Box::new(compose_fn()))),
+            compose: Some(Box::new(move |world| Box::new(compose_fn(world)))),
             state: None,
         }
     }
@@ -86,7 +99,7 @@ pub fn compose(world: &mut World) {
         .collect::<Vec<_>>();
 
     for (compose_fn, state) in &mut composers {
-        let mut compose = compose_fn.as_mut().unwrap()();
+        let mut compose = compose_fn.as_mut().unwrap()(world);
 
         if let Some((target, state)) = state {
             compose.rebuild_any(target.as_any_mut(), &mut **state, world)
