@@ -4,8 +4,8 @@ use bevy::{
     render::color::Color,
     text::{Text, TextSection, TextStyle},
     ui::{
-        node_bundles::{ButtonBundle, TextBundle},
-        AlignItems, BackgroundColor, JustifyContent, Style, UiRect, Val,
+        node_bundles::{ButtonBundle, NodeBundle, TextBundle},
+        AlignItems, BackgroundColor, FlexDirection, JustifyContent, Style, UiRect, Val,
     },
     utils::default,
 };
@@ -40,6 +40,35 @@ impl Compose for () {
     }
 }
 
+impl Compose for &'static str {
+    type State = Entity;
+
+    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
+        let entity = world.spawn(TextBundle::from_section(
+            self.to_owned(),
+            Default::default(),
+        ));
+        let id = entity.id();
+        children.push(id);
+        id
+    }
+
+    fn rebuild(
+        &mut self,
+        target: &mut Self,
+        state: &mut Self::State,
+        world: &mut World,
+        children: &mut Vec<Entity>,
+    ) {
+        children.push(*state);
+
+        if self != target {
+            world.get_mut::<Text>(*state).unwrap().sections[0] =
+                TextSection::new(self.to_owned(), TextStyle::default());
+        }
+    }
+}
+
 impl Compose for String {
     type State = Entity;
 
@@ -66,11 +95,15 @@ impl Compose for String {
     }
 }
 
-impl<C1: Compose, C2: Compose> Compose for (C1, C2) {
-    type State = (C1::State, C2::State);
+impl<C1: Compose, C2: Compose, C3: Compose> Compose for (C1, C2, C3) {
+    type State = (C1::State, C2::State, C3::State);
 
     fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
-        (self.0.build(world, children), self.1.build(world, children))
+        (
+            self.0.build(world, children),
+            self.1.build(world, children),
+            self.2.build(world, children),
+        )
     }
 
     fn rebuild(
@@ -82,6 +115,7 @@ impl<C1: Compose, C2: Compose> Compose for (C1, C2) {
     ) {
         self.0.rebuild(&mut target.0, &mut state.0, world, children);
         self.1.rebuild(&mut target.1, &mut state.1, world, children);
+        self.2.rebuild(&mut target.2, &mut state.2, world, children);
     }
 }
 
@@ -93,13 +127,19 @@ pub struct Button<C> {
     content: C,
 }
 
+impl<C> Button<C> {
+    pub fn on_click(self, handler: impl FnMut(&mut World)) -> Self {
+        self
+    }
+}
+
 impl<C: Compose> Compose for Button<C> {
     type State = Entity;
 
     fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
         let parent_children = mem::take(children);
         self.content.build(world, children);
-        let children = mem::replace(children, parent_children);
+        let my_children = mem::replace(children, parent_children);
 
         let mut entity = world.spawn(ButtonBundle {
             style: Style {
@@ -113,8 +153,11 @@ impl<C: Compose> Compose for Button<C> {
             background_color: BackgroundColor(Color::BLACK),
             ..default()
         });
-        entity.push_children(&children);
-        entity.id()
+        entity.push_children(&my_children);
+
+        let id = entity.id();
+        children.push(id);
+        id
     }
 
     fn rebuild(
@@ -207,6 +250,20 @@ pub fn compose(world: &mut World) {
         } else {
             let s = compose.build_any(world, &mut children);
             *state = Some((compose, s));
+
+            world
+                .spawn(NodeBundle {
+                    style: Style {
+                        width: Val::Percent(100.),
+                        height: Val::Percent(100.),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        ..Default::default()
+                    },
+                    background_color: BackgroundColor(Color::BLACK),
+                    ..Default::default()
+                })
+                .push_children(&children);
         }
     }
 

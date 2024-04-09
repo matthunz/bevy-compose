@@ -7,11 +7,14 @@ struct Count(i32);
 fn ui(world: &mut World) -> impl Compose {
     let count = world.resource_ref::<Count>().0;
 
-    world.resource_mut::<Count>().0 += 1;
-
     (
         format!("High five count: {}", count),
-        button(String::from("Up high!")),
+        button("Up high!").on_click(|world| {
+            world.resource_mut::<Count>().0 += 1;
+        }),
+        button("Down low!").on_click(|world| {
+            world.resource_mut::<Count>().0 += 1;
+        }),
     )
 }
 
