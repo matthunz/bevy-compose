@@ -1,6 +1,7 @@
 [package]
-name = "bevy-react"
+name = "bevy-compose"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bevy = "0.13.2"
