@@ -1,4 +1,8 @@
-use bevy::ecs::{component::Component, world::World};
+use bevy::{
+    ecs::{component::Component, entity::Entity, world::World},
+    text::{Text, TextSection, TextStyle},
+    ui::node_bundles::TextBundle,
+};
 use std::any::Any;
 
 pub trait Compose: Send + Sync + 'static {
@@ -15,6 +19,22 @@ impl Compose for () {
     fn build(&mut self, world: &mut World) -> Self::State {}
 
     fn rebuild(&mut self, target: &mut Self, state: &mut Self::State, world: &mut World) {}
+}
+
+impl Compose for String {
+    type State = Entity;
+
+    fn build(&mut self, world: &mut World) -> Self::State {
+        let entity = world.spawn(TextBundle::from_section(self.clone(), Default::default()));
+        entity.id()
+    }
+
+    fn rebuild(&mut self, target: &mut Self, state: &mut Self::State, world: &mut World) {
+        if self != target {
+            world.get_mut::<Text>(*state).unwrap().sections[0] =
+                TextSection::new(self.clone(), TextStyle::default());
+        }
+    }
 }
 
 pub trait AnyCompose: Send + Sync {
