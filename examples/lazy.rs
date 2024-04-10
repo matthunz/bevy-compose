@@ -1,5 +1,8 @@
 use bevy::prelude::*;
-use bevy_compose::{compose::flex, lazy, Compose, ComposePlugin};
+use bevy_compose::{
+    compose::{flex, lazy},
+    Compose, ComposePlugin,
+};
 
 #[derive(Resource)]
 struct Count(i32);

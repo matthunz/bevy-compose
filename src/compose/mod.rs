@@ -3,6 +3,9 @@ use bevy::prelude::*;
 mod flex;
 pub use self::flex::{flex, handler_system, Flex};
 
+mod lazy;
+pub use self::lazy::{lazy, Lazy, LazyState};
+
 pub trait Compose: Send + Sync + 'static {
     type State: Send + Sync + 'static;
 
