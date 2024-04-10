@@ -1,11 +1,5 @@
 use bevy::{
-    ecs::{
-        component::Component,
-        entity::Entity,
-        query::{Changed, With},
-        system::IntoSystem,
-        world::World,
-    },
+    ecs::{component::Component, entity::Entity, query::Changed, system::IntoSystem, world::World},
     hierarchy::BuildWorldChildren,
     render::color::Color,
     text::{Text, TextSection, TextStyle},
@@ -126,19 +120,19 @@ impl<C1: Compose, C2: Compose, C3: Compose> Compose for (C1, C2, C3) {
     }
 }
 
-pub fn button<C: Compose>(content: C) -> Button<C> {
-    Button {
+pub fn flex<C: Compose>(content: C) -> Flex<C> {
+    Flex {
         content,
         on_click: None,
     }
 }
 
-pub struct Button<C> {
+pub struct Flex<C> {
     content: C,
     on_click: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
 }
 
-impl<C> Button<C> {
+impl<C> Flex<C> {
     pub fn on_click<Marker>(mut self, system: impl IntoSystem<(), (), Marker>) -> Self {
         let mut cell = Some(IntoSystem::<(), (), Marker>::into_system(system));
         let mut id_cell = None;
@@ -155,7 +149,7 @@ impl<C> Button<C> {
     }
 }
 
-impl<C: Compose> Compose for Button<C> {
+impl<C: Compose> Compose for Flex<C> {
     type State = (Entity, C::State);
 
     fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
@@ -182,7 +176,6 @@ impl<C: Compose> Compose for Button<C> {
 
         if let Some(handler) = self.on_click.take() {
             entity.insert(ClickHandler {
-                entity: id,
                 handler: Some(handler),
             });
         }
@@ -208,15 +201,12 @@ impl<C: Compose> Compose for Button<C> {
 
 #[derive(Component)]
 pub struct ClickHandler {
-    entity: Entity,
     handler: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
 }
 
 pub fn handler_system(world: &mut World) {
-    let mut query = world.query_filtered::<
-        (&Interaction, &mut ClickHandler),
-        (Changed<Interaction>, With<bevy::ui::widget::Button>),
-    >();
+    let mut query =
+        world.query_filtered::<(&Interaction, &mut ClickHandler), Changed<Interaction>>();
 
     let mut handlers: Vec<_> = query
         .iter_mut(world)
