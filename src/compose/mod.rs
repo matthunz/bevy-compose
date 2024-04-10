@@ -60,6 +60,7 @@ impl Compose for &'static str {
         if self != target {
             world.get_mut::<Text>(*state).unwrap().sections[0] =
                 TextSection::new(self.to_owned(), TextStyle::default());
+            *target = self;
         }
     }
 }
@@ -86,6 +87,7 @@ impl Compose for String {
         if self != target {
             world.get_mut::<Text>(*state).unwrap().sections[0] =
                 TextSection::new(self.clone(), TextStyle::default());
+            *target = self.clone();
         }
     }
 }
