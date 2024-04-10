@@ -13,6 +13,7 @@ fn ui(count: Res<Count>) -> impl Compose {
                 dbg!("Hover!");
             }),
         flex("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
+        if count.0 == 2 { Some("The number 2!") } else { None },
     )
 }
 

@@ -18,6 +18,10 @@ pub trait Compose: Send + Sync + 'static {
         world: &mut World,
         children: &mut Vec<Entity>,
     );
+
+    fn remove(&mut self, state: &mut Self::State) {
+        dbg!("Remove");
+    }
 }
 
 impl Compose for () {
@@ -88,6 +92,36 @@ impl Compose for String {
             world.get_mut::<Text>(*state).unwrap().sections[0] =
                 TextSection::new(self.clone(), TextStyle::default());
             *target = self.clone();
+        }
+    }
+}
+
+impl<C: Compose> Compose for Option<C> {
+    type State = Option<C::State>;
+
+    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
+        self.as_mut().map(|compose| compose.build(world, children))
+    }
+
+    fn rebuild(
+        &mut self,
+        target: &mut Self,
+        state: &mut Self::State,
+        world: &mut World,
+        children: &mut Vec<Entity>,
+    ) {
+        if let Some(mut compose) = self.take() {
+            if let Some(target) = target {
+                let state = state.as_mut().unwrap();
+                compose.rebuild(target, state, world, children);
+            } else {
+                let new_state = compose.build(world, children);
+                *state = Some(new_state);
+                *target = Some(compose);
+            }
+        } else if let Some(target) = target {
+            let state = state.as_mut().unwrap();
+            target.remove(state)
         }
     }
 }
