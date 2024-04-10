@@ -11,10 +11,12 @@ pub fn flex<C: Compose>(content: C) -> Flex<C> {
     }
 }
 
+type HandlerFn = Box<dyn FnMut(&mut World) + Send + Sync>;
+
 pub struct Flex<C> {
     content: C,
-    on_click: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
-    on_hover: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
+    on_click: Option<HandlerFn>,
+    on_hover: Option<HandlerFn>,
 }
 
 impl<C> Flex<C> {
@@ -112,12 +114,12 @@ impl<C: Compose> Compose for Flex<C> {
 
 #[derive(Component)]
 pub struct ClickHandler {
-    handler: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
+    handler: Option<HandlerFn>,
 }
 
 #[derive(Component)]
 pub struct HoverHandler {
-    handler: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
+    handler: Option<HandlerFn>,
 }
 
 pub fn handler_system(world: &mut World) {

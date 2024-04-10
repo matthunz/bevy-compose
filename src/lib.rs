@@ -58,9 +58,11 @@ impl<C: Compose> AnyCompose for C {
     }
 }
 
+type AnyComposeFn = Box<dyn FnMut(&mut World) -> Box<dyn AnyCompose> + Send + Sync>;
+
 #[derive(Component)]
 pub struct Composer {
-    compose: Option<Box<dyn FnMut(&mut World) -> Box<dyn AnyCompose> + Send + Sync>>,
+    compose: Option<AnyComposeFn>,
     state: Option<(Box<dyn AnyCompose>, Box<dyn Any + Send + Sync>)>,
 }
 

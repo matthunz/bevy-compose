@@ -1,17 +1,17 @@
-use crate::{AnyCompose, Compose};
+use crate::{AnyCompose, AnyComposeFn, Compose};
 use bevy::prelude::*;
 use std::any::Any;
+
+type LazyFn = Box<
+    dyn FnMut(Option<&mut dyn Any>, &mut World, &mut Option<LazyState>, &mut Vec<Entity>)
+        + Send
+        + Sync,
+>;
 
 pub fn lazy<C: Compose, Marker>(system: impl IntoSystem<(), C, Marker>) -> Lazy {
     let mut cell = Some(IntoSystem::<(), C, Marker>::into_system(system));
 
-    let system: Option<
-        Box<
-            dyn FnMut(Option<&mut dyn Any>, &mut World, &mut Option<LazyState>, &mut Vec<Entity>)
-                + Send
-                + Sync,
-        >,
-    > = Some(Box::new(move |target, world, state_cell, children| {
+    let system: Option<LazyFn> = Some(Box::new(move |target, world, state_cell, children| {
         if let Some(ref mut state) = state_cell {
             let _target = target.unwrap();
 
@@ -44,19 +44,13 @@ pub fn lazy<C: Compose, Marker>(system: impl IntoSystem<(), C, Marker>) -> Lazy 
 }
 
 pub struct LazyState {
-    system: Box<dyn FnMut(&mut World) -> Box<dyn AnyCompose> + Send + Sync>,
+    system: AnyComposeFn,
     compose: Box<dyn AnyCompose>,
     state: Box<dyn Any + Send + Sync>,
 }
 
 pub struct Lazy {
-    system: Option<
-        Box<
-            dyn FnMut(Option<&mut dyn Any>, &mut World, &mut Option<LazyState>, &mut Vec<Entity>)
-                + Send
-                + Sync,
-        >,
-    >,
+    system: Option<LazyFn>,
 }
 
 impl Compose for Lazy {

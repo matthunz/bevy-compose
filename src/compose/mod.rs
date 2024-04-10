@@ -92,7 +92,7 @@ impl Compose for String {
         if self != target {
             world.get_mut::<Text>(*state).unwrap().sections[0] =
                 TextSection::new(self.clone(), TextStyle::default());
-            *target = self.clone();
+            target.clone_from(self)
         }
     }
 }
