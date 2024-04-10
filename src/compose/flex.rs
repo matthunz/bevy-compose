@@ -7,12 +7,14 @@ pub fn flex<C: Compose>(content: C) -> Flex<C> {
     Flex {
         content,
         on_click: None,
+        on_hover: None,
     }
 }
 
 pub struct Flex<C> {
     content: C,
     on_click: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
+    on_hover: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
 }
 
 impl<C> Flex<C> {
@@ -20,6 +22,21 @@ impl<C> Flex<C> {
         let mut cell = Some(IntoSystem::<(), (), Marker>::into_system(system));
         let mut id_cell = None;
         self.on_click = Some(Box::new(move |world| {
+            if let Some(system) = cell.take() {
+                let id = world.register_system(system);
+                id_cell = Some(id);
+            }
+
+            let id = id_cell.unwrap();
+            world.run_system(id).unwrap();
+        }));
+        self
+    }
+
+    pub fn on_hover<Marker>(mut self, system: impl IntoSystem<(), (), Marker>) -> Self {
+        let mut cell = Some(IntoSystem::<(), (), Marker>::into_system(system));
+        let mut id_cell = None;
+        self.on_hover = Some(Box::new(move |world| {
             if let Some(system) = cell.take() {
                 let id = world.register_system(system);
                 id_cell = Some(id);
@@ -63,6 +80,12 @@ impl<C: Compose> Compose for Flex<C> {
             });
         }
 
+        if let Some(handler) = self.on_hover.take() {
+            entity.insert(HoverHandler {
+                handler: Some(handler),
+            });
+        }
+
         (id, content_state)
     }
 
@@ -87,27 +110,52 @@ pub struct ClickHandler {
     handler: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
 }
 
+#[derive(Component)]
+pub struct HoverHandler {
+    handler: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
+}
+
 pub fn handler_system(world: &mut World) {
-    let mut query =
-        world.query_filtered::<(&Interaction, &mut ClickHandler), Changed<Interaction>>();
+    let mut query = world.query_filtered::<(
+        &Interaction,
+        Option<&mut ClickHandler>,
+        Option<&mut HoverHandler>,
+    ), Changed<Interaction>>();
 
     let mut handlers: Vec<_> = query
         .iter_mut(world)
-        .map(|(interaction, mut handler)| (*interaction, handler.handler.take()))
+        .map(|(interaction, click_handler, hover_handler)| {
+            (
+                *interaction,
+                click_handler.and_then(|mut h| h.handler.take()),
+                hover_handler.and_then(|mut h| h.handler.take()),
+            )
+        })
         .collect();
 
-    for (interaction, f) in &mut handlers {
+    for (interaction, click_handler, hover_handler) in &mut handlers {
         match interaction {
             Interaction::Pressed => {
-                if let Some(ref mut f) = f {
+                if let Some(ref mut f) = click_handler {
                     f(world)
                 }
             }
-            _ => {}
+            Interaction::Hovered => {
+                if let Some(ref mut f) = hover_handler {
+                    f(world)
+                }
+            }
+            Interaction::None => {}
         }
     }
 
-    for (idx, (_, mut handler)) in query.iter_mut(world).enumerate() {
-        handler.handler = handlers[idx].1.take();
+    for (idx, (_, mut click_handler, mut hover_handler)) in query.iter_mut(world).enumerate() {
+        if let Some(ref mut click_handler) = click_handler {
+            click_handler.handler = handlers[idx].1.take();
+        }
+
+        if let Some(ref mut hover_handler) = hover_handler {
+            hover_handler.handler = handlers[idx].2.take();
+        }
     }
 }
