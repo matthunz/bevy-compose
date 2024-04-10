@@ -1,24 +1,30 @@
 use bevy::prelude::*;
-use bevy_compose::{compose::flex, Compose, ComposePlugin};
+use bevy_compose::{
+    compose::{flex, remember},
+    Compose, ComposePlugin,
+};
 
 #[derive(Resource)]
 struct Count(i32);
 
 fn ui(count: Res<Count>) -> impl Compose {
-    flex((
-        format!("High five count: {}", count.0),
-        flex("Up high!")
-            .on_click(|mut count: ResMut<Count>| count.0 += 1)
-            .on_hover(|| {
-                dbg!("Hover!");
-            }),
-        flex("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
-        if count.0 == 2 {
-            Some("The number 2!")
-        } else {
-            None
-        },
-    ))
+    remember(
+        count.0,
+        flex((
+            format!("High five count: {}", count.0),
+            flex("Up high!")
+                .on_click(|mut count: ResMut<Count>| count.0 += 1)
+                .on_hover(|| {
+                    dbg!("Hover!");
+                }),
+            flex("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
+            if count.0 == 2 {
+                Some("The number 2!")
+            } else {
+                None
+            },
+        )),
+    )
 }
 
 fn main() {
