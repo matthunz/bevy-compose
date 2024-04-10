@@ -1,11 +1,18 @@
 use bevy::{
-    ecs::{component::Component, entity::Entity, world::World},
-    hierarchy::BuildWorldChildren,
+    ecs::{
+        component::Component,
+        entity::Entity,
+        query::{Changed, With},
+        system::{IntoSystem, Query},
+        world::World,
+    },
+    hierarchy::{BuildWorldChildren, Children},
     render::color::Color,
     text::{Text, TextSection, TextStyle},
     ui::{
         node_bundles::{ButtonBundle, NodeBundle, TextBundle},
-        AlignItems, BackgroundColor, FlexDirection, JustifyContent, Style, UiRect, Val,
+        AlignItems, BackgroundColor, BorderColor, FlexDirection, Interaction, JustifyContent,
+        Style, UiImage, UiRect, Val,
     },
     utils::default,
 };
@@ -120,15 +127,30 @@ impl<C1: Compose, C2: Compose, C3: Compose> Compose for (C1, C2, C3) {
 }
 
 pub fn button<C: Compose>(content: C) -> Button<C> {
-    Button { content }
+    Button {
+        content,
+        on_click: None,
+    }
 }
 
 pub struct Button<C> {
     content: C,
+    on_click: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
 }
 
 impl<C> Button<C> {
-    pub fn on_click(self, _handler: impl FnMut(&mut World)) -> Self {
+    pub fn on_click<Marker>(mut self, system: impl IntoSystem<(), (), Marker>) -> Self {
+        let mut cell = Some(IntoSystem::<(), (), Marker>::into_system(system));
+        let mut id_cell = None;
+        self.on_click = Some(Box::new(move |world| {
+            if let Some(system) = cell.take() {
+                let id = world.register_system(system);
+                id_cell = Some(id);
+            }
+
+            let id = id_cell.unwrap();
+            world.run_system(id).unwrap();
+        }));
         self
     }
 }
@@ -138,7 +160,7 @@ impl<C: Compose> Compose for Button<C> {
 
     fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
         let parent_children = mem::take(children);
-        let content_state= self.content.build(world, children);
+        let content_state = self.content.build(world, children);
         let my_children = mem::replace(children, parent_children);
 
         let mut entity = world.spawn(ButtonBundle {
@@ -157,6 +179,14 @@ impl<C: Compose> Compose for Button<C> {
 
         let id = entity.id();
         children.push(id);
+
+        if let Some(handler) = self.on_click.take() {
+            entity.insert(ClickHandler {
+                entity: id,
+                handler: Some(handler),
+            });
+        }
+
         (id, content_state)
     }
 
@@ -168,10 +198,44 @@ impl<C: Compose> Compose for Button<C> {
         children: &mut Vec<Entity>,
     ) {
         let parent_children = mem::take(children);
-        self.content.rebuild(&mut target.content, &mut state.1, world, children);
+        self.content
+            .rebuild(&mut target.content, &mut state.1, world, children);
         let _my_children = mem::replace(children, parent_children);
-        
+
         children.push(state.0);
+    }
+}
+
+#[derive(Component)]
+pub struct ClickHandler {
+    entity: Entity,
+    handler: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
+}
+
+pub fn handler_system(world: &mut World) {
+    let mut query = world.query_filtered::<
+        (&Interaction, &mut ClickHandler),
+        (Changed<Interaction>, With<bevy::ui::widget::Button>),
+    >();
+
+    let mut handlers: Vec<_> = query
+        .iter_mut(world)
+        .map(|(interaction, mut handler)| (*interaction, handler.handler.take()))
+        .collect();
+
+    for (interaction, f) in &mut handlers {
+        match interaction {
+            Interaction::Pressed => {
+                if let Some(ref mut f) = f {
+                    f(world)
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for (idx, (_, mut handler)) in query.iter_mut(world).enumerate() {
+        handler.handler = handlers[idx].1.take();
     }
 }
 
