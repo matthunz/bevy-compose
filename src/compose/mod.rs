@@ -90,26 +90,32 @@ impl Compose for String {
     }
 }
 
-impl<C1: Compose, C2: Compose, C3: Compose> Compose for (C1, C2, C3) {
-    type State = (C1::State, C2::State, C3::State);
+macro_rules! impl_compose_for_tuple {
+    ($($t:tt: $idx:tt),*) => {
+        impl<$($t:Compose),*> Compose for ($($t),*) {
+            type State = ($($t::State),*);
 
-    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
-        (
-            self.0.build(world, children),
-            self.1.build(world, children),
-            self.2.build(world, children),
-        )
-    }
+            fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
+                ( $(self.$idx.build(world, children)),* )
+            }
 
-    fn rebuild(
-        &mut self,
-        target: &mut Self,
-        state: &mut Self::State,
-        world: &mut World,
-        children: &mut Vec<Entity>,
-    ) {
-        self.0.rebuild(&mut target.0, &mut state.0, world, children);
-        self.1.rebuild(&mut target.1, &mut state.1, world, children);
-        self.2.rebuild(&mut target.2, &mut state.2, world, children);
-    }
+            fn rebuild(
+                &mut self,
+                target: &mut Self,
+                state: &mut Self::State,
+                world: &mut World,
+                children: &mut Vec<Entity>,
+            ) {
+                $( self.$idx.rebuild(&mut target.$idx, &mut state.$idx, world, children) );*
+            }
+        }
+    };
 }
+
+impl_compose_for_tuple!(C1: 0, C2: 1);
+impl_compose_for_tuple!(C1: 0, C2: 1, C3: 2);
+impl_compose_for_tuple!(C1: 0, C2: 1, C3: 2, C4: 3);
+impl_compose_for_tuple!(C1: 0, C2: 1, C3: 2, C4: 3, C5: 4);
+impl_compose_for_tuple!(C1: 0, C2: 1, C3: 2, C4: 3, C5: 4, C6: 5);
+impl_compose_for_tuple!(C1: 0, C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6);
+impl_compose_for_tuple!(C1: 0, C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6, C8: 7);
