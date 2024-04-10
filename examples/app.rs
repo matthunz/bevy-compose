@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_compose::{compose, flex, handler_system, lazy, Compose, Composer};
+use bevy_compose::{compose::flex, Compose, ComposePlugin};
 
 #[derive(Resource)]
 struct Count(i32);
@@ -16,11 +16,9 @@ fn main() {
     let mut app = App::new();
 
     app.world.insert_resource(Count(0));
-    app.world.spawn(Composer::new(ui));
     app.world
         .spawn((Camera2dBundle::default(), IsDefaultUiCamera));
 
-    app.add_plugins(DefaultPlugins)
-        .add_systems(Update, (compose, handler_system))
+    app.add_plugins((DefaultPlugins, ComposePlugin::new(ui)))
         .run();
 }

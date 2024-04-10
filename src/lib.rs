@@ -1,233 +1,15 @@
 use bevy::{
-    ecs::{component::Component, entity::Entity, query::Changed, system::IntoSystem, world::World},
+    app::{Plugin, Update},
+    ecs::{component::Component, entity::Entity, system::IntoSystem, world::World},
     hierarchy::BuildWorldChildren,
     render::color::Color,
-    text::{Text, TextSection, TextStyle},
-    ui::{
-        node_bundles::{ButtonBundle, NodeBundle, TextBundle},
-        AlignItems, BackgroundColor, FlexDirection, Interaction, JustifyContent, Style, UiRect,
-        Val,
-    },
-    utils::default,
+    ui::{node_bundles::NodeBundle, AlignItems, BackgroundColor, FlexDirection, Style, Val},
 };
-use std::{any::Any, mem};
+use compose::handler_system;
+use std::{any::Any, sync::Arc};
 
-pub trait Compose: Send + Sync + 'static {
-    type State: Send + Sync + 'static;
-
-    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State;
-
-    fn rebuild(
-        &mut self,
-        target: &mut Self,
-        state: &mut Self::State,
-        world: &mut World,
-        children: &mut Vec<Entity>,
-    );
-}
-
-impl Compose for () {
-    type State = ();
-
-    fn build(&mut self, _world: &mut World, _children: &mut Vec<Entity>) -> Self::State {}
-
-    fn rebuild(
-        &mut self,
-        _target: &mut Self,
-        _state: &mut Self::State,
-        _world: &mut World,
-        _children: &mut Vec<Entity>,
-    ) {
-    }
-}
-
-impl Compose for &'static str {
-    type State = Entity;
-
-    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
-        let entity = world.spawn(TextBundle::from_section(
-            self.to_owned(),
-            Default::default(),
-        ));
-        let id = entity.id();
-        children.push(id);
-        id
-    }
-
-    fn rebuild(
-        &mut self,
-        target: &mut Self,
-        state: &mut Self::State,
-        world: &mut World,
-        children: &mut Vec<Entity>,
-    ) {
-        children.push(*state);
-
-        if self != target {
-            world.get_mut::<Text>(*state).unwrap().sections[0] =
-                TextSection::new(self.to_owned(), TextStyle::default());
-        }
-    }
-}
-
-impl Compose for String {
-    type State = Entity;
-
-    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
-        let entity = world.spawn(TextBundle::from_section(self.clone(), Default::default()));
-        let id = entity.id();
-        children.push(id);
-        id
-    }
-
-    fn rebuild(
-        &mut self,
-        target: &mut Self,
-        state: &mut Self::State,
-        world: &mut World,
-        children: &mut Vec<Entity>,
-    ) {
-        children.push(*state);
-
-        if self != target {
-            world.get_mut::<Text>(*state).unwrap().sections[0] =
-                TextSection::new(self.clone(), TextStyle::default());
-        }
-    }
-}
-
-impl<C1: Compose, C2: Compose, C3: Compose> Compose for (C1, C2, C3) {
-    type State = (C1::State, C2::State, C3::State);
-
-    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
-        (
-            self.0.build(world, children),
-            self.1.build(world, children),
-            self.2.build(world, children),
-        )
-    }
-
-    fn rebuild(
-        &mut self,
-        target: &mut Self,
-        state: &mut Self::State,
-        world: &mut World,
-        children: &mut Vec<Entity>,
-    ) {
-        self.0.rebuild(&mut target.0, &mut state.0, world, children);
-        self.1.rebuild(&mut target.1, &mut state.1, world, children);
-        self.2.rebuild(&mut target.2, &mut state.2, world, children);
-    }
-}
-
-pub fn flex<C: Compose>(content: C) -> Flex<C> {
-    Flex {
-        content,
-        on_click: None,
-    }
-}
-
-pub struct Flex<C> {
-    content: C,
-    on_click: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
-}
-
-impl<C> Flex<C> {
-    pub fn on_click<Marker>(mut self, system: impl IntoSystem<(), (), Marker>) -> Self {
-        let mut cell = Some(IntoSystem::<(), (), Marker>::into_system(system));
-        let mut id_cell = None;
-        self.on_click = Some(Box::new(move |world| {
-            if let Some(system) = cell.take() {
-                let id = world.register_system(system);
-                id_cell = Some(id);
-            }
-
-            let id = id_cell.unwrap();
-            world.run_system(id).unwrap();
-        }));
-        self
-    }
-}
-
-impl<C: Compose> Compose for Flex<C> {
-    type State = (Entity, C::State);
-
-    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
-        let parent_children = mem::take(children);
-        let content_state = self.content.build(world, children);
-        let my_children = mem::replace(children, parent_children);
-
-        let mut entity = world.spawn(ButtonBundle {
-            style: Style {
-                width: Val::Px(150.0),
-                height: Val::Px(65.0),
-                border: UiRect::all(Val::Px(5.0)),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            background_color: BackgroundColor(Color::BLACK),
-            ..default()
-        });
-        entity.push_children(&my_children);
-
-        let id = entity.id();
-        children.push(id);
-
-        if let Some(handler) = self.on_click.take() {
-            entity.insert(ClickHandler {
-                handler: Some(handler),
-            });
-        }
-
-        (id, content_state)
-    }
-
-    fn rebuild(
-        &mut self,
-        target: &mut Self,
-        state: &mut Self::State,
-        world: &mut World,
-        children: &mut Vec<Entity>,
-    ) {
-        let parent_children = mem::take(children);
-        self.content
-            .rebuild(&mut target.content, &mut state.1, world, children);
-        let _my_children = mem::replace(children, parent_children);
-
-        children.push(state.0);
-    }
-}
-
-#[derive(Component)]
-pub struct ClickHandler {
-    handler: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
-}
-
-pub fn handler_system(world: &mut World) {
-    let mut query =
-        world.query_filtered::<(&Interaction, &mut ClickHandler), Changed<Interaction>>();
-
-    let mut handlers: Vec<_> = query
-        .iter_mut(world)
-        .map(|(interaction, mut handler)| (*interaction, handler.handler.take()))
-        .collect();
-
-    for (interaction, f) in &mut handlers {
-        match interaction {
-            Interaction::Pressed => {
-                if let Some(ref mut f) = f {
-                    f(world)
-                }
-            }
-            _ => {}
-        }
-    }
-
-    for (idx, (_, mut handler)) in query.iter_mut(world).enumerate() {
-        handler.handler = handlers[idx].1.take();
-    }
-}
+pub mod compose;
+pub use compose::Compose;
 
 pub trait AnyCompose: Send + Sync {
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -354,8 +136,12 @@ pub fn lazy<C: Compose, Marker>(system: impl IntoSystem<(), C, Marker>) -> Lazy 
             let target = target.unwrap();
 
             let mut compose = (state.system)(world);
-            compose.rebuild_any(state.compose.as_any_mut(), &mut *state.state, world, children);
-            
+            compose.rebuild_any(
+                state.compose.as_any_mut(),
+                &mut *state.state,
+                world,
+                children,
+            );
         } else {
             let system = cell.take().unwrap();
             let system_id = world.register_system(system);
@@ -378,7 +164,7 @@ pub fn lazy<C: Compose, Marker>(system: impl IntoSystem<(), C, Marker>) -> Lazy 
 }
 
 pub struct LazyState {
-    system: Box<dyn FnMut(&mut World) -> Box<dyn AnyCompose>+ Send + Sync> ,
+    system: Box<dyn FnMut(&mut World) -> Box<dyn AnyCompose> + Send + Sync>,
     compose: Box<dyn AnyCompose>,
     state: Box<dyn Any + Send + Sync>,
 }
@@ -410,5 +196,27 @@ impl Compose for Lazy {
         children: &mut Vec<Entity>,
     ) {
         self.system.as_mut().unwrap()(Some(target), world, state, children);
+    }
+}
+
+pub struct ComposePlugin {
+    make_composer: Arc<dyn Fn() -> Composer + Send + Sync>,
+}
+
+impl ComposePlugin {
+    pub fn new<C: Compose, Marker>(
+        compose_fn: impl IntoSystem<(), C, Marker> + Clone + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            make_composer: Arc::new(move || Composer::new(compose_fn.clone())),
+        }
+    }
+}
+
+impl Plugin for ComposePlugin {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        app.world.spawn((self.make_composer)());
+
+        app.add_systems(Update, (compose, handler_system));
     }
 }
