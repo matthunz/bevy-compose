@@ -22,7 +22,7 @@ pub trait Compose: Send + Sync + 'static {
         children: &mut Vec<Entity>,
     );
 
-    fn remove(&mut self, state: &mut Self::State) {}
+    fn remove(&mut self, _state: &mut Self::State) {}
 }
 
 impl Compose for () {
