@@ -19,9 +19,7 @@ pub trait Compose: Send + Sync + 'static {
         children: &mut Vec<Entity>,
     );
 
-    fn remove(&mut self, state: &mut Self::State) {
-        dbg!("Remove");
-    }
+    fn remove(&mut self, state: &mut Self::State) {}
 }
 
 impl Compose for () {
@@ -119,9 +117,9 @@ impl<C: Compose> Compose for Option<C> {
                 *state = Some(new_state);
                 *target = Some(compose);
             }
-        } else if let Some(target) = target {
+        } else if let Some(mut target) = target.take() {
             let state = state.as_mut().unwrap();
-            target.remove(state)
+            target.remove(state);
         }
     }
 }

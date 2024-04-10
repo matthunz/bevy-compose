@@ -5,7 +5,7 @@ use bevy_compose::{compose::flex, Compose, ComposePlugin};
 struct Count(i32);
 
 fn ui(count: Res<Count>) -> impl Compose {
-    (
+    flex((
         format!("High five count: {}", count.0),
         flex("Up high!")
             .on_click(|mut count: ResMut<Count>| count.0 += 1)
@@ -13,8 +13,12 @@ fn ui(count: Res<Count>) -> impl Compose {
                 dbg!("Hover!");
             }),
         flex("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
-        if count.0 == 2 { Some("The number 2!") } else { None },
-    )
+        if count.0 == 2 {
+            Some("The number 2!")
+        } else {
+            None
+        },
+    ))
 }
 
 fn main() {

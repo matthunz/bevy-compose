@@ -50,7 +50,7 @@ impl<C> Flex<C> {
 }
 
 impl<C: Compose> Compose for Flex<C> {
-    type State = (Entity, C::State);
+    type State = (Entity, C::State, Vec<Entity>);
 
     fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
         let parent_children = mem::take(children);
@@ -86,7 +86,7 @@ impl<C: Compose> Compose for Flex<C> {
             });
         }
 
-        (id, content_state)
+        (id, content_state, my_children)
     }
 
     fn rebuild(
@@ -99,7 +99,12 @@ impl<C: Compose> Compose for Flex<C> {
         let parent_children = mem::take(children);
         self.content
             .rebuild(&mut target.content, &mut state.1, world, children);
-        let _my_children = mem::replace(children, parent_children);
+        let my_children = mem::replace(children, parent_children);
+
+        if my_children != state.2 {
+            world.entity_mut(state.0).replace_children(&my_children);
+            state.2 = my_children;
+        }
 
         children.push(state.0);
     }
