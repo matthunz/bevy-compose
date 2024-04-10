@@ -1,21 +1,21 @@
 use crate::Compose;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-pub fn remember<C: Compose>(input: impl Hash, content: C) -> Remember<C> {
+pub fn memo<C: Compose>(input: impl Hash, content: C) -> Memo<C> {
     let mut hasher = DefaultHasher::new();
     input.hash(&mut hasher);
-    Remember {
+    Memo {
         hash: hasher.finish(),
         content,
     }
 }
 
-pub struct Remember<C> {
+pub struct Memo<C> {
     hash: u64,
     content: C,
 }
 
-impl<C> Compose for Remember<C>
+impl<C> Compose for Memo<C>
 where
     C: Compose,
 {

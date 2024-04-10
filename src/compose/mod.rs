@@ -6,8 +6,8 @@ pub use self::flex::{flex, handler_system, Flex};
 mod lazy;
 pub use self::lazy::{lazy, Lazy, LazyState};
 
-mod remember;
-pub use self::remember::{remember, Remember};
+mod memo;
+pub use self::memo::{memo, Memo};
 
 pub trait Compose: Send + Sync + 'static {
     type State: Send + Sync + 'static;

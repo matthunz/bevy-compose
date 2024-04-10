@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_compose::{
-    compose::{flex, remember},
+    compose::{flex, memo},
     Compose, ComposePlugin,
 };
 
@@ -8,7 +8,7 @@ use bevy_compose::{
 struct Count(i32);
 
 fn ui(count: Res<Count>) -> impl Compose {
-    remember(
+    memo(
         count.0,
         flex((
             format!("High five count: {}", count.0),
