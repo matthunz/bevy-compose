@@ -339,3 +339,50 @@ pub fn compose(world: &mut World) {
         composer.state = composers[idx].1.take();
     }
 }
+
+
+
+
+pub fn lazy<C: Compose, Marker>(system: impl IntoSystem<(), C, Marker>) -> Lazy {
+    let mut cell = Some(IntoSystem::<(), C, Marker>::into_system(system));
+    let mut id_cell = None;
+
+    let system: Option<Box<dyn FnMut(&mut World) + Send + Sync>> =
+        Some(Box::new(move |world: &mut World| {
+            if let Some(system) = cell.take() {
+                let id = world.register_system(system);
+                id_cell = Some(id);
+            }
+
+            let id = id_cell.unwrap();
+            let compose = world.run_system(id).unwrap();
+            
+        }));
+
+    Lazy { system }
+}
+
+pub struct Lazy {
+    system: Option<Box<dyn FnMut(&mut World) + Send + Sync>>,
+}
+
+impl Compose for Lazy {
+    type State = Box<dyn Any + Send + Sync>;
+
+    fn build(&mut self, world: &mut World, children: &mut Vec<Entity>) -> Self::State {
+        self.system.as_mut().unwrap()(world);
+
+        Box::new(())
+    }
+
+    fn rebuild(
+        &mut self,
+        target: &mut Self,
+        state: &mut Self::State,
+        world: &mut World,
+        children: &mut Vec<Entity>,
+    ) {
+    
+    }
+}
+

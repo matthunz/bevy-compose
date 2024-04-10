@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_compose::{flex, compose, handler_system, Compose, Composer};
+use bevy_compose::{compose, flex, handler_system, lazy, Compose, Composer};
 
 #[derive(Resource)]
 struct Count(i32);
@@ -8,7 +8,10 @@ fn ui(count: Res<Count>) -> impl Compose {
     (
         format!("High five count: {}", count.0),
         flex("Up high!").on_click(|mut count: ResMut<Count>| count.0 += 1),
-        flex("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
+        //flex("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
+        lazy(|count: Res<Count>| {
+            dbg!(count.0);
+        })
     )
 }
 
