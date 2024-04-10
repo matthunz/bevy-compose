@@ -3,16 +3,16 @@ use bevy::{
         component::Component,
         entity::Entity,
         query::{Changed, With},
-        system::{IntoSystem, Query},
+        system::IntoSystem,
         world::World,
     },
-    hierarchy::{BuildWorldChildren, Children},
+    hierarchy::BuildWorldChildren,
     render::color::Color,
     text::{Text, TextSection, TextStyle},
     ui::{
         node_bundles::{ButtonBundle, NodeBundle, TextBundle},
-        AlignItems, BackgroundColor, BorderColor, FlexDirection, Interaction, JustifyContent,
-        Style, UiImage, UiRect, Val,
+        AlignItems, BackgroundColor, FlexDirection, Interaction, JustifyContent, Style, UiRect,
+        Val,
     },
     utils::default,
 };
@@ -293,11 +293,19 @@ pub struct Composer {
 }
 
 impl Composer {
-    pub fn new<C: Compose>(
-        mut compose_fn: impl FnMut(&mut World) -> C + Send + Sync + 'static,
-    ) -> Self {
+    pub fn new<Marker, C: Compose>(compose_fn: impl IntoSystem<(), C, Marker>) -> Self {
+        let mut system_cell = Some(IntoSystem::<(), C, Marker>::into_system(compose_fn));
+        let mut id_cell = None;
         Self {
-            compose: Some(Box::new(move |world| Box::new(compose_fn(world)))),
+            compose: Some(Box::new(move |world| {
+                if let Some(system) = system_cell.take() {
+                    let id = world.register_system(system);
+                    id_cell = Some(id);
+                }
+
+                let id = id_cell.unwrap();
+                Box::new(world.run_system(id).unwrap())
+            })),
             state: None,
         }
     }

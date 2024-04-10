@@ -4,11 +4,9 @@ use bevy_compose::{button, compose, handler_system, Compose, Composer};
 #[derive(Resource)]
 struct Count(i32);
 
-fn ui(world: &mut World) -> impl Compose {
-    let count = world.resource_ref::<Count>().0;
-
+fn ui(count: Res<Count>) -> impl Compose {
     (
-        format!("High five count: {}", count),
+        format!("High five count: {}", count.0),
         button("Up high!").on_click(|mut count: ResMut<Count>| count.0 += 1),
         button("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
     )
