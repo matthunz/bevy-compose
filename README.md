@@ -11,3 +11,6 @@ fn ui(count: Res<Count>) -> impl Compose {
     )
 }
 ```
+
+## Inspiration
+This crate is inspired by [Xilem](https://github.com/linebender/xilem) and SwiftUI with its typed approach to reactivity.
