@@ -63,7 +63,10 @@ where
     fn setup(app: &mut App) -> Self::State {
         let entity = app.world.spawn(LazyFunction::<F> { f: None }).id();
         let content_state = C::setup(app);
-        app.add_systems(Update, make_lazy_system::<Marker, F, C>(entity, content_state));
+        app.add_systems(
+            Update,
+            make_lazy_system::<Marker, F, C>(entity, content_state),
+        );
 
         entity
     }
@@ -104,6 +107,52 @@ where
         if let Some(f) = &mut wrapper.f {
             let mut content = f.run((), p.p0());
             content.run(&mut state, p.p1());
+        }
+    }
+}
+
+pub fn effect<D, F, Marker>(deps: D, f: F) -> Effect<D, F, Marker> {
+    Effect {
+        deps: Some(deps),
+        f,
+        _marker: PhantomData,
+    }
+}
+
+pub struct Effect<D, F, Marker> {
+    deps: Option<D>,
+    f: F,
+    _marker: PhantomData<Marker>,
+}
+
+impl<D, F, Marker> Compose for Effect<D, F, Marker>
+where
+    D: PartialEq + Send + Sync + 'static,
+    F: SystemParamFunction<Marker, In = (), Out = ()>,
+{
+    type State = Option<D>;
+
+    type Input<'w, 's> = ParamSet<'w, 's, (F::Param,)>;
+
+    fn setup(app: &mut App) -> Self::State {
+        None
+    }
+
+    fn run(
+        &mut self,
+        state: &mut Self::State,
+        mut input: <Self::Input<'_, '_> as SystemParam>::Item<'_, '_>,
+    ) {
+        let deps = self.deps.take().unwrap();
+
+        if let Some(last) = state {
+            if deps != *last {
+                self.f.run((), input.p0());
+                *state = Some(deps);
+            }
+        } else {
+            self.f.run((), input.p0());
+            *state = Some(deps);
         }
     }
 }
