@@ -18,7 +18,10 @@
 <br />
 
 
-Parallel reactivity for Bevy
+Parallel reactivity for Bevy.
+
+This crate provides a framework for UI and other reactive systems using the ECS.
+Components can be created with `lazy` and run in parallel like regular systems (they can even use `Local` and other system parameters).
 
 ```rust
 fn app() -> impl Compose {
