@@ -18,7 +18,7 @@
 <br />
 
 
-Reactive UI framework for Bevy
+Parallel reactivity for Bevy
 
 ```rust
 fn app() -> impl Compose {
