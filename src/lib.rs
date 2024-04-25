@@ -38,24 +38,17 @@ fn setup(mut commands: Commands) {
     commands.spawn((Camera2dBundle::default(), IsDefaultUiCamera));
 }
 
-#[derive(Deref, DerefMut)]
-pub struct StateComponent<T>(pub T);
-
-impl<T: Send + Sync + 'static> Component for StateComponent<T> {
-    type Storage = SparseStorage;
-}
-
 #[derive(SystemParam)]
-pub struct UseState<'w, 's, T: Send + Sync + 'static> {
+pub struct UseState<'w, 's, T: Component> {
     commands: Commands<'w, 's>,
     cell: Local<'s, Option<Entity>>,
-    query: Query<'w, 's, &'static mut StateComponent<T>>,
+    query: Query<'w, 's, &'static mut T>,
     _marker: PhantomData<T>,
 }
 
 impl<T> UseState<'_, '_, T>
 where
-    T: Send + Sync + 'static,
+    T: Component,
 {
     pub fn use_state(&mut self, make_value: impl FnOnce() -> T) -> (StateHandle<T>, Entity) {
         if let Some(entity) = *self.cell {
@@ -77,20 +70,20 @@ where
     }
 }
 
-pub enum StateHandle<'a, T: Send + Sync + 'static> {
-    Borrowed(Mut<'a, StateComponent<T>>),
+pub enum StateHandle<'a, T: Component> {
+    Borrowed(Mut<'a, T>),
     Owned {
         value_cell: Option<T>,
         entity_commands: EntityCommands<'a>,
     },
 }
 
-impl<'a, T: Send + Sync + 'static> Deref for StateHandle<'a, T> {
+impl<'a, T: Component> Deref for StateHandle<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         match self {
-            StateHandle::Borrowed(value) => &value.0,
+            StateHandle::Borrowed(value) => &value,
             StateHandle::Owned {
                 value_cell: value,
                 entity_commands: _,
@@ -99,10 +92,10 @@ impl<'a, T: Send + Sync + 'static> Deref for StateHandle<'a, T> {
     }
 }
 
-impl<'a, T: Send + Sync + 'static> DerefMut for StateHandle<'a, T> {
+impl<'a, T: Component> DerefMut for StateHandle<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
-            StateHandle::Borrowed(value) => &mut value.0,
+            StateHandle::Borrowed(value) => &mut *value,
             StateHandle::Owned {
                 value_cell,
                 entity_commands: _,
@@ -111,7 +104,7 @@ impl<'a, T: Send + Sync + 'static> DerefMut for StateHandle<'a, T> {
     }
 }
 
-impl<'a, T: Send + Sync + 'static> Drop for StateHandle<'a, T> {
+impl<'a, T: Component> Drop for StateHandle<'a, T> {
     fn drop(&mut self) {
         match self {
             StateHandle::Borrowed(_) => {}
@@ -119,7 +112,7 @@ impl<'a, T: Send + Sync + 'static> Drop for StateHandle<'a, T> {
                 value_cell: value,
                 entity_commands,
             } => {
-                entity_commands.insert(StateComponent(value.take().unwrap()));
+                entity_commands.insert(value.take().unwrap());
             }
         }
     }

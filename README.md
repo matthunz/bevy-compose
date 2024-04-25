@@ -24,18 +24,27 @@ This crate provides a framework for UI and other reactive systems using the ECS.
 Components can be created with `lazy` and run in parallel like regular systems (they can even use `Local` and other system parameters).
 
 ```rust
+#[derive(Component, Deref, DerefMut)]
+struct Count(i32);
+
 fn app() -> impl Compose {
-    lazy(|mut count: UseState<i32>| {
-        let (mut count, _count_entity) = count.use_state(|| 0);
+    lazy(|mut count: UseState<Count>| {
+        let (count, count_entity) = count.use_state(|| Count(0));
 
-        *count += 1;
-
-        format!("High five count: {}", *count)
+        flex((
+            format!("High five count: {}", **count),
+            flex("Up high!").on_click(move |mut count_query: Query<&mut Count>| {
+                if let Ok(mut count) = count_query.get_mut(count_entity) {
+                    **count += 1
+                }
+            }),
+            flex("Down low!").on_click(move |mut count_query: Query<&mut Count>| {
+                if let Ok(mut count) = count_query.get_mut(count_entity) {
+                    **count -= 1
+                }
+            }),
+        ))
     })
-}
-
-fn main() {
-    bevy_compose::run(app);
 }
 ```
 

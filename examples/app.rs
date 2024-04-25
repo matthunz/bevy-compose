@@ -1,21 +1,27 @@
-use bevy::ecs::system::Query;
+use bevy::{
+    ecs::{component::Component, system::Query},
+    prelude::{Deref, DerefMut},
+};
 use bevy_compose::{
     compose::{flex, lazy},
-    Compose, StateComponent, UseState,
+    Compose, UseState,
 };
 
+#[derive(Component, Deref, DerefMut)]
+struct Count(i32);
+
 fn app() -> impl Compose {
-    lazy(|mut count: UseState<i32>| {
-        let (count, count_entity) = count.use_state(|| 0);
+    lazy(|mut count: UseState<Count>| {
+        let (count, count_entity) = count.use_state(|| Count(0));
 
         flex((
-            format!("High five count: {}", *count),
-            flex("Up high!").on_click(move |mut count_query: Query<&mut StateComponent<i32>>| {
+            format!("High five count: {}", **count),
+            flex("Up high!").on_click(move |mut count_query: Query<&mut Count>| {
                 if let Ok(mut count) = count_query.get_mut(count_entity) {
                     **count += 1
                 }
             }),
-            flex("Down low!").on_click(move |mut count_query: Query<&mut StateComponent<i32>>| {
+            flex("Down low!").on_click(move |mut count_query: Query<&mut Count>| {
                 if let Ok(mut count) = count_query.get_mut(count_entity) {
                     **count -= 1
                 }
