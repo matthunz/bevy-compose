@@ -1,39 +1,15 @@
-use bevy::prelude::*;
-use bevy_compose::{
-    compose::{flex, memo},
-    Compose, ComposePlugin,
-};
+use bevy_compose::{lazy, Compose, UseState};
 
-#[derive(Resource)]
-struct Count(i32);
+fn app() -> impl Compose {
+    lazy(|mut count: UseState<i32>| {
+        let (mut count, _count_entity) = count.use_state(|| 0);
 
-fn ui(count: Res<Count>) -> impl Compose {
-    memo(
-        count.0,
-        flex((
-            format!("High five count: {}", count.0),
-            flex("Up high!")
-                .on_click(|mut count: ResMut<Count>| count.0 += 1)
-                .on_hover(|| {
-                    dbg!("Hover!");
-                }),
-            flex("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
-            if count.0 == 2 {
-                Some("The number 2!")
-            } else {
-                None
-            },
-        )),
-    )
+        dbg!(*count);
+
+        *count += 1;
+    })
 }
 
 fn main() {
-    let mut app = App::new();
-
-    app.world.insert_resource(Count(0));
-    app.world
-        .spawn((Camera2dBundle::default(), IsDefaultUiCamera));
-
-    app.add_plugins((DefaultPlugins, ComposePlugin::new(ui)))
-        .run();
+    bevy_compose::run(app);
 }
