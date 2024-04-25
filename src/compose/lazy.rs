@@ -37,9 +37,9 @@ where
     type State = Entity;
     type Input<'w, 's> = Query<'w, 's, &'static mut LazyFunction<F>>;
 
-    fn setup(app: &mut App) -> Self::State {
+    fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
         let entity = app.world.spawn(LazyFunction::<F> { f: None }).id();
-        let content_state = C::setup(app);
+        let content_state = C::setup(app, parent);
         app.add_systems(
             Update,
             make_lazy_system::<Marker, F, C>(entity, content_state),

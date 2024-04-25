@@ -9,7 +9,7 @@ fn app() -> impl Compose {
 
         *count += 1;
 
-        flex((format!("High five count: {}", *count), "Up high!"))
+        flex(format!("High five count: {}", *count))
     })
 }
 

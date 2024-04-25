@@ -1,12 +1,9 @@
 use bevy::{
-    app::{App, Update},
-    ecs::{
+    app::{App, Update}, ecs::{
         component::{Component, SparseStorage},
         entity::Entity,
         system::{Commands, ParamSet, Query, SystemParam},
-    },
-    text::Text,
-    ui::node_bundles::TextBundle,
+    }, hierarchy::BuildWorldChildren, text::Text, ui::node_bundles::TextBundle
 };
 
 mod effect;
@@ -22,7 +19,7 @@ pub trait Compose {
     type State: Send + Sync + 'static;
     type Input<'w, 's>: SystemParam;
 
-    fn setup(app: &mut App) -> Self::State;
+    fn setup(app: &mut App, parent: Option<Entity>) -> Self::State;
 
     fn run(
         self,
@@ -36,7 +33,7 @@ impl Compose for () {
 
     type Input<'w, 's> = ();
 
-    fn setup(_app: &mut App) -> Self::State {}
+    fn setup(_app: &mut App, _parent: Option<Entity>) -> Self::State {}
 
     fn run(self, _state: &mut Self::State, _input: Self::Input<'_, '_>) {}
 }
@@ -46,9 +43,13 @@ impl Compose for &'static str {
 
     type Input<'w, 's> = (Commands<'w, 's>, Query<'w, 's, &'static mut Text>);
 
-    fn setup(app: &mut App) -> Self::State {
-        let entity = app.world.spawn_empty().id();
-        (None, entity)
+    fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
+        let mut entity = app.world.spawn_empty();
+        if let Some(parent) = parent {
+            entity.set_parent(parent);
+        }
+
+        (None, entity.id())
     }
 
     fn run(
@@ -75,9 +76,13 @@ impl Compose for String {
 
     type Input<'w, 's> = (Commands<'w, 's>, Query<'w, 's, &'static mut Text>);
 
-    fn setup(app: &mut App) -> Self::State {
-        let entity = app.world.spawn_empty().id();
-        (None, entity)
+    fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
+        let mut entity = app.world.spawn_empty();
+        if let Some(parent) = parent {
+            entity.set_parent(parent);
+        }
+
+        (None, entity.id())
     }
 
     fn run(
@@ -117,12 +122,14 @@ where
         Query<'w, 's, &'static mut TupleCompose<C2>>,
     );
 
-    fn setup(app: &mut App) -> Self::State {
+    fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
         let c1 = app.world.spawn(TupleCompose::<C1>(None)).id();
-        let mut c1_state = C1::setup(app);
+        let mut c1_state = C1::setup(app, parent);
+
+        dbg!(parent);
 
         let c2 = app.world.spawn(TupleCompose::<C2>(None)).id();
-        let mut c2_state = C2::setup(app);
+        let mut c2_state = C2::setup(app, parent);
 
         app.add_systems(
             Update,

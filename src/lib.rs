@@ -24,7 +24,7 @@ where
     C: Compose + Send + Sync + 'static,
 {
     let mut app = App::new();
-    let mut state = C::setup(&mut app);
+    let mut state = C::setup(&mut app, None);
     app.add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .add_systems(Update, move |mut params: ParamSet<(C::Input<'_, '_>,)>| {

@@ -1,7 +1,7 @@
 use crate::Compose;
 use bevy::{
     app::App,
-    ecs::system::{ParamSet, SystemParam, SystemParamFunction},
+    ecs::{entity::Entity, system::{ParamSet, SystemParam, SystemParamFunction}},
 };
 use std::marker::PhantomData;
 
@@ -28,7 +28,7 @@ where
 
     type Input<'w, 's> = ParamSet<'w, 's, (F::Param,)>;
 
-    fn setup(_app: &mut App) -> Self::State {
+    fn setup(_app: &mut App, _parent: Option<Entity>) -> Self::State {
         None
     }
 
