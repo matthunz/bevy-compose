@@ -1,12 +1,15 @@
 use bevy::{
-    app::{App, Update}, ecs::{
+    app::{App, Update},
+    ecs::{
         component::{Component, SparseStorage},
         entity::Entity,
         system::{
             Commands, EntityCommands, Local, ParamSet, Query, SystemParam, SystemParamFunction,
         },
         world::Mut,
-    }, prelude::{Deref, DerefMut}, DefaultPlugins
+    },
+    prelude::{Deref, DerefMut},
+    DefaultPlugins,
 };
 use std::{
     marker::PhantomData,
