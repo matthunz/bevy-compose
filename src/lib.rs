@@ -1,5 +1,6 @@
 use bevy::{
-    app::{App, Update},
+    app::{App, Startup, Update},
+    core_pipeline::core_2d::Camera2dBundle,
     ecs::{
         component::{Component, SparseStorage},
         entity::Entity,
@@ -9,6 +10,7 @@ use bevy::{
         world::Mut,
     },
     prelude::{Deref, DerefMut},
+    ui::IsDefaultUiCamera,
     DefaultPlugins,
 };
 use std::{
@@ -25,13 +27,17 @@ where
 {
     let mut app = App::new();
     let mut state = C::setup(&mut app);
-    app.add_systems(Update, move |mut params: ParamSet<(C::Input<'_, '_>,)>| {
-        let compose = compose_fn();
-        compose.run(&mut state, params.p0());
-    });
+    app.add_plugins(DefaultPlugins)
+        .add_systems(Startup, setup)
+        .add_systems(Update, move |mut params: ParamSet<(C::Input<'_, '_>,)>| {
+            let compose = compose_fn();
+            compose.run(&mut state, params.p0());
+        })
+        .run();
+}
 
-    app.add_plugins(DefaultPlugins);
-    app.run();
+fn setup(mut commands: Commands) {
+    commands.spawn((Camera2dBundle::default(), IsDefaultUiCamera));
 }
 
 #[derive(Deref, DerefMut)]

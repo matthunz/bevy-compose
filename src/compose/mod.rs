@@ -3,8 +3,10 @@ use bevy::{
     ecs::{
         component::{Component, SparseStorage},
         entity::Entity,
-        system::{ParamSet, Query, SystemParam},
+        system::{Commands, ParamSet, Query, SystemParam},
     },
+    text::Text,
+    ui::node_bundles::TextBundle,
 };
 
 mod effect;
@@ -34,6 +36,64 @@ impl Compose for () {
     fn setup(_app: &mut App) -> Self::State {}
 
     fn run(self, _state: &mut Self::State, _input: Self::Input<'_, '_>) {}
+}
+
+impl Compose for &'static str {
+    type State = (Option<Self>, Entity);
+
+    type Input<'w, 's> = (Commands<'w, 's>, Query<'w, 's, &'static mut Text>);
+
+    fn setup(app: &mut App) -> Self::State {
+        let entity = app.world.spawn_empty().id();
+        (None, entity)
+    }
+
+    fn run(
+        self,
+        (last_cell, entity): &mut Self::State,
+        (mut commands, mut text_query): <Self::Input<'_, '_> as SystemParam>::Item<'_, '_>,
+    ) {
+        if let Some(last) = last_cell {
+            if self != *last {
+                text_query.get_mut(*entity).unwrap().sections[0].value = self.to_owned();
+                *last_cell = Some(self)
+            }
+        } else {
+            commands
+                .entity(*entity)
+                .insert(TextBundle::from_section(self, Default::default()));
+            *last_cell = Some(self)
+        }
+    }
+}
+
+impl Compose for String {
+    type State = (Option<Self>, Entity);
+
+    type Input<'w, 's> = (Commands<'w, 's>, Query<'w, 's, &'static mut Text>);
+
+    fn setup(app: &mut App) -> Self::State {
+        let entity = app.world.spawn_empty().id();
+        (None, entity)
+    }
+
+    fn run(
+        self,
+        (last_cell, entity): &mut Self::State,
+        (mut commands, mut text_query): <Self::Input<'_, '_> as SystemParam>::Item<'_, '_>,
+    ) {
+        if let Some(last) = last_cell {
+            if self != *last {
+                text_query.get_mut(*entity).unwrap().sections[0].value = self.to_owned();
+                *last_cell = Some(self)
+            }
+        } else {
+            commands
+                .entity(*entity)
+                .insert(TextBundle::from_section(self.clone(), Default::default()));
+            *last_cell = Some(self)
+        }
+    }
 }
 
 pub struct TupleCompose<C>(Option<C>);
