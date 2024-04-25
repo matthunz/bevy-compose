@@ -1,4 +1,4 @@
-use bevy_compose::{lazy, Compose, UseState};
+use bevy_compose::{compose::lazy, Compose, UseState};
 
 fn app() -> impl Compose {
     lazy(|mut count: UseState<i32>| {
