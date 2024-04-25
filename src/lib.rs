@@ -4,9 +4,7 @@ use bevy::{
     ecs::{
         component::{Component, SparseStorage},
         entity::Entity,
-        system::{
-            Commands, EntityCommands, Local, ParamSet, Query, SystemParam, SystemParamFunction,
-        },
+        system::{Commands, EntityCommands, Local, ParamSet, Query, SystemParam},
         world::Mut,
     },
     prelude::{Deref, DerefMut},

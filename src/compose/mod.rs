@@ -12,6 +12,9 @@ use bevy::{
 mod effect;
 pub use self::effect::{effect, Effect};
 
+mod flex;
+pub use self::flex::{flex, Flex};
+
 mod lazy;
 pub use self::lazy::{lazy, Lazy, LazyFunction};
 

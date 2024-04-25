@@ -1,4 +1,7 @@
-use bevy_compose::{compose::lazy, Compose, UseState};
+use bevy_compose::{
+    compose::{flex, lazy},
+    Compose, UseState,
+};
 
 fn app() -> impl Compose {
     lazy(|mut count: UseState<i32>| {
@@ -6,7 +9,7 @@ fn app() -> impl Compose {
 
         *count += 1;
 
-        format!("High five count: {}", *count)
+        flex((format!("High five count: {}", *count), "Up high!"))
     })
 }
 
