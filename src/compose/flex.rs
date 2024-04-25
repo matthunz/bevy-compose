@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use crate::Compose;
 use bevy::{
     app::Update,
@@ -12,6 +10,7 @@ use bevy::{
     hierarchy::BuildWorldChildren,
     ui::{node_bundles::NodeBundle, Interaction, Style},
 };
+use std::marker::PhantomData;
 
 pub fn flex<C: Compose>(content: C) -> Flex<C> {
     Flex { content }

@@ -2,12 +2,11 @@ use bevy::{
     app::{App, Startup, Update},
     core_pipeline::core_2d::Camera2dBundle,
     ecs::{
-        component::{Component, SparseStorage},
+        component::Component,
         entity::Entity,
         system::{Commands, EntityCommands, Local, ParamSet, Query, SystemParam},
         world::Mut,
     },
-    prelude::{Deref, DerefMut},
     ui::IsDefaultUiCamera,
     DefaultPlugins,
 };
@@ -83,7 +82,7 @@ impl<'a, T: Component> Deref for StateHandle<'a, T> {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            StateHandle::Borrowed(value) => &value,
+            StateHandle::Borrowed(value) => value,
             StateHandle::Owned {
                 value_cell: value,
                 entity_commands: _,
