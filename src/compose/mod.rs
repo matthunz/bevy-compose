@@ -114,59 +114,51 @@ impl<C: Send + Sync + 'static> Component for TupleCompose<C> {
     type Storage = SparseStorage;
 }
 
-impl<C1, C2> Compose for (C1, C2)
-where
-    C1: Compose + Send + Sync + 'static,
-    C2: Compose + Send + Sync + 'static,
-{
-    type State = [Entity; 2];
+macro_rules! impl_compose_for_tuple {
+    (($($t:tt: $idx:tt),*), $len:tt) => {
+        #[allow(non_snake_case)]
+        impl<$($t: Compose + Send + Sync + 'static),*> Compose for ($($t),*) {
+            type State = [Entity; $len];
 
-    type Input<'w, 's> = (
-        Query<'w, 's, &'static mut TupleCompose<C1>>,
-        Query<'w, 's, &'static mut TupleCompose<C2>>,
-    );
+            type Input<'w, 's> = ($(Query<'w, 's, &'static mut TupleCompose<$t>>),*);
 
-    fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
-        let c1 = app.world.spawn(TupleCompose::<C1>(None)).id();
-        let mut c1_state = C1::setup(app, parent);
+            fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
+                $(
+                    let $t = app.world.spawn(TupleCompose::<$t>(None)).id();
+                    let mut c_state = $t::setup(app, parent);
+                    app.add_systems(
+                        Update,
+                        move |mut q: Query<&mut TupleCompose<$t>>,
+                              mut params: ParamSet<($t::Input<'_, '_>,)>| {
+                            let mut content = q.get_mut($t).unwrap();
+                            if let Some(content) = content.0.take() {
+                                content.run(&mut c_state, params.p0());
+                            }
+                        },
+                    );
+                )*
 
-        let c2 = app.world.spawn(TupleCompose::<C2>(None)).id();
-        let mut c2_state = C2::setup(app, parent);
+                [$($t),*]
+            }
 
-        app.add_systems(
-            Update,
-            move |mut q: Query<&mut TupleCompose<C1>>,
-                  mut params: ParamSet<(C1::Input<'_, '_>,)>| {
-                let mut content = q.get_mut(c1).unwrap();
-                if let Some(content) = content.0.take() {
-                    content.run(&mut c1_state, params.p0());
-                }
-            },
-        );
-
-        app.add_systems(
-            Update,
-            move |mut q: Query<&mut TupleCompose<C2>>,
-                  mut params: ParamSet<(C2::Input<'_, '_>,)>| {
-                let mut content = q.get_mut(c2).unwrap();
-                if let Some(content) = content.0.take() {
-                    content.run(&mut c2_state, params.p0());
-                }
-            },
-        );
-
-        [c1, c2]
-    }
-
-    fn run(
-        self,
-        [entity1, entity2]: &mut Self::State,
-        (mut query1, mut query2): <Self::Input<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) {
-        let mut c1 = query1.get_mut(*entity1).unwrap();
-        c1.0 = Some(self.0);
-
-        let mut c2 = query2.get_mut(*entity2).unwrap();
-        c2.0 = Some(self.1);
-    }
+            fn run(
+                self,
+                state: &mut Self::State,
+                mut input: <Self::Input<'_, '_> as SystemParam>::Item<'_, '_>,
+            ) {
+                $(
+                    let mut c = input.$idx.get_mut(state[$idx]).unwrap();
+                    c.0 = Some(self.$idx);
+                )*
+            }
+        }
+    };
 }
+
+impl_compose_for_tuple!((C1: 0, C2: 1), 2);
+impl_compose_for_tuple!((C1: 0, C2: 1, C3: 2), 3);
+impl_compose_for_tuple!((C1: 0, C2: 1, C3: 2, C4: 3), 4);
+impl_compose_for_tuple!((C1: 0, C2: 1, C3: 2, C4: 3, C5: 4), 5);
+impl_compose_for_tuple!((C1: 0, C2: 1, C3: 2, C4: 3, C5: 4, C6: 5), 6);
+impl_compose_for_tuple!((C1: 0, C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6), 7);
+impl_compose_for_tuple!((C1: 0, C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6, C8: 7), 8);

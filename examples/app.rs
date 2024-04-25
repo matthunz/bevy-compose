@@ -10,9 +10,15 @@ fn app() -> impl Compose {
 
         flex((
             format!("High five count: {}", *count),
-            flex("Up high").on_click(move |mut count_query: Query<&mut StateComponent<i32>>| {
-                let mut count = count_query.get_mut(count_entity).unwrap();
-                **count += 1;
+            flex("Up high!").on_click(move |mut count_query: Query<&mut StateComponent<i32>>| {
+                if let Ok(mut count) = count_query.get_mut(count_entity) {
+                    **count += 1
+                }
+            }),
+            flex("Down low!").on_click(move |mut count_query: Query<&mut StateComponent<i32>>| {
+                if let Ok(mut count) = count_query.get_mut(count_entity) {
+                    **count -= 1
+                }
             }),
         ))
     })
