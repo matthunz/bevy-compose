@@ -10,7 +10,7 @@ use bevy_compose::{
 #[derive(Component, Deref, DerefMut)]
 struct Count(i32);
 
-fn app() -> impl Compose {
+fn counter() -> impl Compose {
     lazy(|mut count: UseState<Count>| {
         let (count, count_entity) = count.use_state(|| Count(0));
 
@@ -28,6 +28,10 @@ fn app() -> impl Compose {
             }),
         ))
     })
+}
+
+fn app() -> impl Compose {
+    flex((lazy(|| counter()), lazy(|| counter())))
 }
 
 fn main() {
