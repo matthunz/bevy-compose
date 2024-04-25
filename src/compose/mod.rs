@@ -44,7 +44,7 @@ impl Compose for &'static str {
     type Input<'w, 's> = (Commands<'w, 's>, Query<'w, 's, &'static mut Text>);
 
     fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
-        let mut entity = app.world.spawn_empty();
+        let mut entity = app.world.spawn(TextBundle::default());
         if let Some(parent) = parent {
             entity.set_parent(parent);
         }
@@ -77,7 +77,7 @@ impl Compose for String {
     type Input<'w, 's> = (Commands<'w, 's>, Query<'w, 's, &'static mut Text>);
 
     fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
-        let mut entity = app.world.spawn_empty();
+        let mut entity = app.world.spawn(TextBundle::default());
         if let Some(parent) = parent {
             entity.set_parent(parent);
         }
@@ -125,8 +125,6 @@ where
     fn setup(app: &mut App, parent: Option<Entity>) -> Self::State {
         let c1 = app.world.spawn(TupleCompose::<C1>(None)).id();
         let mut c1_state = C1::setup(app, parent);
-
-        dbg!(parent);
 
         let c2 = app.world.spawn(TupleCompose::<C2>(None)).id();
         let mut c2_state = C2::setup(app, parent);

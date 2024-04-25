@@ -22,7 +22,7 @@ impl<C: Compose> Compose for Flex<C> {
     type Input<'w, 's> = (Commands<'w, 's>, ParamSet<'w, 's, (C::Input<'w, 's>,)>);
 
     fn setup(app: &mut bevy::prelude::App, parent: Option<Entity>) -> Self::State {
-        let mut entity = app.world.spawn_empty();
+        let mut entity = app.world.spawn(NodeBundle::default());
         if let Some(parent) = parent {
             entity.set_parent(parent);
         }
