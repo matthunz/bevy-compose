@@ -1,15 +1,20 @@
+use bevy::ecs::system::Query;
 use bevy_compose::{
     compose::{flex, lazy},
-    Compose, UseState,
+    Compose, StateComponent, UseState,
 };
 
 fn app() -> impl Compose {
     lazy(|mut count: UseState<i32>| {
-        let (mut count, _count_entity) = count.use_state(|| 0);
+        let (count, count_entity) = count.use_state(|| 0);
 
-        *count += 1;
-
-        flex((format!("High five count: {}", *count), "Up high"))
+        flex((
+            format!("High five count: {}", *count),
+            flex("Up high").on_click(move |mut count_query: Query<&mut StateComponent<i32>>| {
+                let mut count = count_query.get_mut(count_entity).unwrap();
+                **count += 1;
+            }),
+        ))
     })
 }
 

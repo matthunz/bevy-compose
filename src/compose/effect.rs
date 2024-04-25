@@ -1,7 +1,10 @@
 use crate::Compose;
 use bevy::{
     app::App,
-    ecs::{entity::Entity, system::{ParamSet, SystemParam, SystemParamFunction}},
+    ecs::{
+        entity::Entity,
+        system::{ParamSet, SystemParam, SystemParamFunction},
+    },
 };
 use std::marker::PhantomData;
 

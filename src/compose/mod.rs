@@ -1,9 +1,13 @@
 use bevy::{
-    app::{App, Update}, ecs::{
+    app::{App, Update},
+    ecs::{
         component::{Component, SparseStorage},
         entity::Entity,
         system::{Commands, ParamSet, Query, SystemParam},
-    }, hierarchy::BuildWorldChildren, text::Text, ui::node_bundles::TextBundle
+    },
+    hierarchy::BuildWorldChildren,
+    text::Text,
+    ui::node_bundles::TextBundle,
 };
 
 mod effect;
