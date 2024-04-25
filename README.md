@@ -21,16 +21,20 @@
 Reactive UI framework for Bevy
 
 ```rust
-fn ui(count: Res<Count>) -> impl Compose {
-    (
-        format!("High five count: {}", count.0),
-        flex("Up high!").on_click(|mut count: ResMut<Count>| count.0 += 1),
-        flex("Down low!").on_click(|mut count: ResMut<Count>| count.0 -= 1),
-    )
+fn app() -> impl Compose {
+    lazy(|mut count: UseState<i32>| {
+        let (mut count, _count_entity) = count.use_state(|| 0);
+
+        dbg!(*count);
+
+        *count += 1;
+    })
+}
+
+fn main() {
+    bevy_compose::run(app);
 }
 ```
-
-Components are also supported with `lazy(|player_query: Query<&mut Player>| { ... }`
 
 ## Inspiration
 This crate is inspired by [Xilem](https://github.com/linebender/xilem), [Concoct](https://github.com/concoct-rs/concoct) and SwiftUI with its typed approach to reactivity.

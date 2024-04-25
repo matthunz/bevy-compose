@@ -1,14 +1,12 @@
 use bevy::{
-    app::{App, Update},
-    ecs::{
+    app::{App, Update}, ecs::{
         component::{Component, SparseStorage},
         entity::Entity,
         system::{
             Commands, EntityCommands, Local, ParamSet, Query, SystemParam, SystemParamFunction,
         },
         world::Mut,
-    },
-    DefaultPlugins,
+    }, prelude::{Deref, DerefMut}, DefaultPlugins
 };
 use std::{
     marker::PhantomData,
@@ -241,6 +239,7 @@ where
     app.run();
 }
 
+#[derive(Deref, DerefMut)]
 pub struct StateComponent<T>(pub T);
 
 impl<T: Send + Sync + 'static> Component for StateComponent<T> {
