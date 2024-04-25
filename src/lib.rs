@@ -3,11 +3,17 @@ use bevy::{
     ecs::{
         component::{Component, SparseStorage},
         entity::Entity,
-        system::{ParamSet, Query, SystemParam, SystemParamFunction},
+        system::{
+            Commands, EntityCommands, Local, ParamSet, Query, SystemParam, SystemParamFunction,
+        },
+        world::Mut,
     },
     DefaultPlugins,
 };
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 pub trait Compose {
     type State: Send + Sync + 'static;
@@ -29,7 +35,7 @@ impl Compose for () {
 
     fn setup(_app: &mut App) -> Self::State {}
 
-    fn run( self, _state: &mut Self::State, _input: Self::Input<'_, '_>) {}
+    fn run(self, _state: &mut Self::State, _input: Self::Input<'_, '_>) {}
 }
 
 pub struct TupleCompose<C>(Option<C>);
@@ -135,7 +141,7 @@ where
     }
 
     fn run(
-       mut self,
+        mut self,
         state: &mut Self::State,
         mut input: <Self::Input<'_, '_> as SystemParam>::Item<'_, '_>,
     ) {
@@ -168,7 +174,7 @@ where
     move |mut p, mut query| {
         let mut wrapper = query.get_mut(entity).unwrap();
         if let Some(f) = &mut wrapper.f {
-            let mut content = f.run((), p.p0());
+            let content = f.run((), p.p0());
             content.run(&mut state, p.p1());
         }
     }
@@ -197,12 +203,12 @@ where
 
     type Input<'w, 's> = ParamSet<'w, 's, (F::Param,)>;
 
-    fn setup(app: &mut App) -> Self::State {
+    fn setup(_app: &mut App) -> Self::State {
         None
     }
 
     fn run(
-       mut self,
+        mut self,
         state: &mut Self::State,
         mut input: <Self::Input<'_, '_> as SystemParam>::Item<'_, '_>,
     ) {
@@ -220,7 +226,6 @@ where
     }
 }
 
-
 pub fn run<C>(mut compose_fn: impl FnMut() -> C + Send + Sync + 'static)
 where
     C: Compose + Send + Sync + 'static,
@@ -228,10 +233,92 @@ where
     let mut app = App::new();
     let mut state = C::setup(&mut app);
     app.add_systems(Update, move |mut params: ParamSet<(C::Input<'_, '_>,)>| {
-        let mut compose = compose_fn();
+        let compose = compose_fn();
         compose.run(&mut state, params.p0());
     });
 
     app.add_plugins(DefaultPlugins);
     app.run();
+}
+
+pub struct StateComponent<T>(pub T);
+
+impl<T: Send + Sync + 'static> Component for StateComponent<T> {
+    type Storage = SparseStorage;
+}
+
+#[derive(SystemParam)]
+pub struct UseState<'w, 's, T: Send + Sync + 'static> {
+    commands: Commands<'w, 's>,
+    cell: Local<'s, Option<Entity>>,
+    query: Query<'w, 's, &'static mut StateComponent<T>>,
+    _marker: PhantomData<T>,
+}
+
+impl<T> UseState<'_, '_, T>
+where
+    T: Send + Sync + 'static,
+{
+    pub fn use_state(&mut self, make_value: impl FnOnce() -> T) -> StateHandle<T> {
+        if let Some(entity) = *self.cell {
+            let state = self.query.get_mut(entity).unwrap();
+            StateHandle::Borrowed(state)
+        } else {
+            let entity_commands = self.commands.spawn_empty();
+            *self.cell = Some(entity_commands.id());
+
+            StateHandle::Owned {
+                value_cell: Some(make_value()),
+                entity_commands,
+            }
+        }
+    }
+}
+
+pub enum StateHandle<'a, T: Send + Sync + 'static> {
+    Borrowed(Mut<'a, StateComponent<T>>),
+    Owned {
+        value_cell: Option<T>,
+        entity_commands: EntityCommands<'a>,
+    },
+}
+
+impl<'a, T: Send + Sync + 'static> Deref for StateHandle<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            StateHandle::Borrowed(value) => &value.0,
+            StateHandle::Owned {
+                value_cell: value,
+                entity_commands: _,
+            } => value.as_ref().unwrap(),
+        }
+    }
+}
+
+impl<'a, T: Send + Sync + 'static> DerefMut for StateHandle<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            StateHandle::Borrowed(value) => &mut value.0,
+            StateHandle::Owned {
+                value_cell,
+                entity_commands: _,
+            } => value_cell.as_mut().unwrap(),
+        }
+    }
+}
+
+impl<'a, T: Send + Sync + 'static> Drop for StateHandle<'a, T> {
+    fn drop(&mut self) {
+        match self {
+            StateHandle::Borrowed(_) => {}
+            StateHandle::Owned {
+                value_cell: value,
+                entity_commands,
+            } => {
+                entity_commands.insert(StateComponent(value.take().unwrap()));
+            }
+        }
+    }
 }

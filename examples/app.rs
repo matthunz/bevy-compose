@@ -1,18 +1,12 @@
-use bevy::ecs::system::Local;
-use bevy_compose::{effect, lazy, Compose};
+use bevy_compose::{lazy, Compose, UseState};
 
 fn app() -> impl Compose {
-    lazy(|| {
-        (
-            effect(0, |mut x: Local<i32>| {
-                dbg!(*x);
-                *x += 1;
-            }),
-            effect(0, |mut y: Local<i32>| {
-                dbg!(*y);
-                *y += 1;
-            }),
-        )
+    lazy(|mut count: UseState<i32>| {
+        let mut count = count.use_state(|| 0);
+
+        dbg!(*count);
+
+        *count += 1;
     })
 }
 
