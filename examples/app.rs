@@ -3,13 +3,19 @@ use bevy_compose::{effect, lazy, Compose};
 
 fn app() -> impl Compose {
     lazy(|| {
-        effect(0, |mut x: Local<i32>| {
-            dbg!(*x);
-            *x += 1;
-        })
+        (
+            effect(0, |mut x: Local<i32>| {
+                dbg!(*x);
+                *x += 1;
+            }),
+            effect(0, |mut y: Local<i32>| {
+                dbg!(*y);
+                *y += 1;
+            }),
+        )
     })
 }
 
 fn main() {
-    bevy_compose::run(app());
+    bevy_compose::run(app);
 }
