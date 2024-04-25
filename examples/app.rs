@@ -2,7 +2,7 @@ use bevy_compose::{lazy, Compose, UseState};
 
 fn app() -> impl Compose {
     lazy(|mut count: UseState<i32>| {
-        let mut count = count.use_state(|| 0);
+        let (mut count, _count_entity) = count.use_state(|| 0);
 
         dbg!(*count);
 

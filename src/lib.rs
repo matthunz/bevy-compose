@@ -259,18 +259,22 @@ impl<T> UseState<'_, '_, T>
 where
     T: Send + Sync + 'static,
 {
-    pub fn use_state(&mut self, make_value: impl FnOnce() -> T) -> StateHandle<T> {
+    pub fn use_state(&mut self, make_value: impl FnOnce() -> T) -> (StateHandle<T>, Entity) {
         if let Some(entity) = *self.cell {
             let state = self.query.get_mut(entity).unwrap();
-            StateHandle::Borrowed(state)
+            (StateHandle::Borrowed(state), entity)
         } else {
             let entity_commands = self.commands.spawn_empty();
             *self.cell = Some(entity_commands.id());
 
-            StateHandle::Owned {
-                value_cell: Some(make_value()),
-                entity_commands,
-            }
+            let entity = entity_commands.id();
+            (
+                StateHandle::Owned {
+                    value_cell: Some(make_value()),
+                    entity_commands,
+                },
+                entity,
+            )
         }
     }
 }
