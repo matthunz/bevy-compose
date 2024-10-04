@@ -24,27 +24,43 @@ This crate provides a framework for UI and other reactive systems using the ECS.
 Components can be created with `lazy` and run in parallel like regular systems (they can even use `Local` and other system parameters).
 
 ```rust
-#[derive(Component, Deref, DerefMut)]
-struct Count(i32);
+use bevy::prelude::*;
+use bevy_compose::TemplatePlugin;
 
-fn app() -> impl Compose {
-    lazy(|mut count: UseState<Count>| {
-        let (count, count_entity) = count.use_state(|| Count(0));
+#[derive(Component, Deref)]
+struct Health(i32);
 
-        flex((
-            format!("High five count: {}", **count),
-            flex("Up high!").on_click(move |mut count_query: Query<&mut Count>| {
-                if let Ok(mut count) = count_query.get_mut(count_entity) {
-                    **count += 1
-                }
-            }),
-            flex("Down low!").on_click(move |mut count_query: Query<&mut Count>| {
-                if let Ok(mut count) = count_query.get_mut(count_entity) {
-                    **count -= 1
-                }
-            }),
+#[derive(Component, Deref)]
+struct Damage(i32);
+
+#[derive(Component)]
+struct Zombie;
+
+fn main() {
+    App::new()
+        .add_plugins(TemplatePlugin::default().with_template(
+            Zombie,
+            (
+                || Health(100),
+                |entity: In<Entity>, health_query: Query<&Health>| {
+                    let health = health_query.get(*entity).unwrap();
+                    Damage(**health * 2)
+                },
+            ),
         ))
-    })
+        .add_systems(Startup, setup)
+        .add_systems(PostUpdate, debug)
+        .run();
+}
+
+fn setup(mut commands: Commands) {
+    commands.spawn(Zombie);
+}
+
+fn debug(query: Query<&Damage>) {
+    for dmg in &query {
+        dbg!(**dmg);
+    }
 }
 ```
 
