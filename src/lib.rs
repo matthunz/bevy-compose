@@ -1,118 +1,95 @@
-use bevy::{
-    app::{App, Startup, Update},
-    core_pipeline::core_2d::Camera2dBundle,
-    ecs::{
-        component::Component,
-        entity::Entity,
-        system::{Commands, EntityCommands, Local, ParamSet, Query, SystemParam},
-        world::Mut,
-    },
-    ui::IsDefaultUiCamera,
-    DefaultPlugins,
-};
+use bevy::prelude::*;
 use std::{
     marker::PhantomData,
-    ops::{Deref, DerefMut},
+    sync::{Arc, Mutex},
 };
 
-pub mod compose;
-pub use compose::Compose;
+#[derive(Default)]
+pub struct TemplatePlugin {
+    fns: Vec<Box<dyn Fn(&mut App) + Send + Sync>>,
+}
 
-pub fn run<C>(mut compose_fn: impl FnMut() -> C + Send + Sync + 'static)
+impl TemplatePlugin {
+    pub fn with_template<T: Component, Marker>(
+        mut self,
+        label: T,
+        template: impl IntoTemplateData<Marker>,
+    ) -> Self {
+        let _ = label;
+        let data = template.into_template_data();
+        self.fns.push(Box::new(move |app| {
+            data.build::<T>(app);
+        }));
+        self
+    }
+}
+
+impl Plugin for TemplatePlugin {
+    fn build(&self, app: &mut App) {
+        for f in &self.fns {
+            f(app);
+        }
+    }
+}
+
+pub trait Template: Send + Sync + 'static {
+    fn build<T: Component>(&self, app: &mut App);
+}
+
+pub struct FunctionData<F, Marker> {
+    f: Arc<Mutex<F>>,
+    _marker: PhantomData<Marker>,
+}
+
+impl<F, C, Marker> Template for FunctionData<F, Marker>
 where
-    C: Compose + Send + Sync + 'static,
+    F: SystemParamFunction<Marker, In = (), Out = C>,
+    F::Param: 'static,
+    C: Component,
+    Marker: Send + Sync + 'static,
 {
-    let mut app = App::new();
-    let mut state = C::setup(&mut app, None);
-    app.add_plugins(DefaultPlugins)
-        .add_systems(Startup, setup)
-        .add_systems(Update, move |mut params: ParamSet<(C::Input<'_, '_>,)>| {
-            let compose = compose_fn();
-            compose.run(&mut state, params.p0());
-        })
-        .run();
+    fn build<T: Component>(&self, app: &mut App) {
+        let f = self.f.clone();
+        app.add_systems(
+            Update,
+            move |mut params: ParamSet<(
+                Commands,
+                Query<(Entity, Option<&mut C>), With<T>>,
+                F::Param,
+            )>| {
+                let entities: Vec<_> = params.p1().iter().map(|(entity, _)| entity).collect();
+                for entity in entities {
+                    let out = f.lock().unwrap().run((), params.p2());
+                    if let Some(mut x) = params.p1().get_mut(entity).unwrap().1 {
+                        *x = out;
+                    } else {
+                        params.p0().entity(entity).insert(out);
+                    }
+                }
+            },
+        );
+    }
 }
 
-fn setup(mut commands: Commands) {
-    commands.spawn((Camera2dBundle::default(), IsDefaultUiCamera));
+pub trait IntoTemplateData<Marker> {
+    type Data: Template;
+
+    fn into_template_data(self) -> Self::Data;
 }
 
-#[derive(SystemParam)]
-pub struct UseState<'w, 's, T: Component> {
-    commands: Commands<'w, 's>,
-    cell: Local<'s, Option<Entity>>,
-    query: Query<'w, 's, &'static mut T>,
-    _marker: PhantomData<T>,
-}
-
-impl<T> UseState<'_, '_, T>
+impl<F, C, Marker> IntoTemplateData<Marker> for F
 where
-    T: Component,
+    F: SystemParamFunction<Marker, In = (), Out = C>,
+    F::Param: 'static,
+    C: Component,
+    Marker: Send + Sync + 'static,
 {
-    pub fn use_state(&mut self, make_value: impl FnOnce() -> T) -> (StateHandle<T>, Entity) {
-        if let Some(entity) = *self.cell {
-            let state = self.query.get_mut(entity).unwrap();
-            (StateHandle::Borrowed(state), entity)
-        } else {
-            let entity_commands = self.commands.spawn_empty();
-            *self.cell = Some(entity_commands.id());
+    type Data = FunctionData<F, Marker>;
 
-            let entity = entity_commands.id();
-            (
-                StateHandle::Owned {
-                    value_cell: Some(make_value()),
-                    entity_commands,
-                },
-                entity,
-            )
-        }
-    }
-}
-
-pub enum StateHandle<'a, T: Component> {
-    Borrowed(Mut<'a, T>),
-    Owned {
-        value_cell: Option<T>,
-        entity_commands: EntityCommands<'a>,
-    },
-}
-
-impl<'a, T: Component> Deref for StateHandle<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            StateHandle::Borrowed(value) => value,
-            StateHandle::Owned {
-                value_cell: value,
-                entity_commands: _,
-            } => value.as_ref().unwrap(),
-        }
-    }
-}
-
-impl<'a, T: Component> DerefMut for StateHandle<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            StateHandle::Borrowed(value) => &mut *value,
-            StateHandle::Owned {
-                value_cell,
-                entity_commands: _,
-            } => value_cell.as_mut().unwrap(),
-        }
-    }
-}
-
-impl<'a, T: Component> Drop for StateHandle<'a, T> {
-    fn drop(&mut self) {
-        match self {
-            StateHandle::Borrowed(_) => {}
-            StateHandle::Owned {
-                value_cell: value,
-                entity_commands,
-            } => {
-                entity_commands.insert(value.take().unwrap());
-            }
+    fn into_template_data(self) -> Self::Data {
+        FunctionData {
+            f: Arc::new(Mutex::new(self)),
+            _marker: PhantomData,
         }
     }
 }
