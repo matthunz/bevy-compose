@@ -18,10 +18,9 @@
 <br />
 
 
-Reactive UI framework for Bevy.
+Reactive ECS plugin for Bevy.
 
-This crate provides a framework for UI and other reactive systems using the ECS.
-Components can be created with `lazy` and run in parallel like regular systems (they can even use `Local` and other system parameters).
+This crate provides a framework for reactive systems using the ECS.
 
 ```rust
 use bevy::prelude::*;
