@@ -63,7 +63,6 @@ where
                     *x = out;
                 } else {
                     params.p0().entity(entity).insert(out);
-                    dbg!(entity);
                 }
             }
         })
@@ -73,7 +72,7 @@ where
 
 impl<T1: Template, T2: Template> Template for (T1, T2) {
     fn build<T: Component>(&self) -> SystemConfigs {
-        (self.0.build::<T>(), self.1.build::<T>()).chain()
+        (self.0.build::<T>(), apply_deferred, self.1.build::<T>()).chain()
     }
 }
 
@@ -107,7 +106,6 @@ pub struct EmptyFunctionData<F, Marker> {
     _marker: PhantomData<Marker>,
 }
 
-
 impl<F, C, Marker> Template for EmptyFunctionData<F, Marker>
 where
     F: SystemParamFunction<Marker, In = (), Out = C>,
@@ -130,7 +128,6 @@ where
                     *x = out;
                 } else {
                     params.p0().entity(entity).insert(out);
-                    dbg!(entity);
                 }
             }
         })
