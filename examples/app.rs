@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_compose::TemplatePlugin;
 
-#[derive(Component, Deref)]
+#[derive(Clone, Copy, PartialEq, Component, Deref)]
 struct Health(i32);
 
 #[derive(Component, Deref)]
