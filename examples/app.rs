@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_compose::TemplatePlugin;
+use bevy_compose::{Template, TemplatePlugin};
 
 #[derive(Clone, Copy, PartialEq, Component, Deref)]
 struct Health(i32);
@@ -12,7 +12,7 @@ struct Zombie;
 
 fn main() {
     App::new()
-        .add_plugins(TemplatePlugin::default().with_template(
+        .add_plugins(TemplatePlugin::default().add(Template::new(
             // Spawning a Zombie will spawn the following components:
             Zombie,
             (
@@ -25,7 +25,7 @@ fn main() {
                     Damage(**health * 2)
                 },
             ),
-        ))
+        )))
         .add_systems(Startup, setup)
         .add_systems(PostUpdate, debug)
         .run();
@@ -38,5 +38,6 @@ fn setup(mut commands: Commands) {
 fn debug(query: Query<&Damage>) {
     for dmg in &query {
         dbg!(**dmg);
+        // 200.
     }
 }

@@ -16,20 +16,12 @@ use std::{
 
 #[derive(Default)]
 pub struct TemplatePlugin {
-    template_fns: Vec<Box<dyn Fn(&mut App, &mut Vec<TemplateData>) + Send + Sync>>,
+    template_fns: Vec<Box<dyn Fn(&mut App, &mut Vec<TemplateInfo>) + Send + Sync>>,
 }
 
 impl TemplatePlugin {
-    pub fn with_template<T: Component, Marker>(
-        mut self,
-        label: T,
-        template: impl IntoTemplate<Marker>,
-    ) -> Self {
-        let _ = label;
-        let template = template.into_template();
-        self.template_fns.push(Box::new(move |app, data| {
-            template.build::<T>(app, data);
-        }));
+    pub fn add<T>(mut self, template: Template<T>) -> Self {
+        self.template_fns.push(template.build_fn);
         self
     }
 }
@@ -121,13 +113,13 @@ where
     }
 }
 
-pub struct TemplateData {
+pub struct TemplateInfo {
     system: Box<dyn AnySystemParamFunction>,
     reads: Vec<ComponentId>,
     output: TypeId,
 }
 
-impl Clone for TemplateData {
+impl Clone for TemplateInfo {
     fn clone(&self) -> Self {
         Self {
             system: self.system.clone_any(),
@@ -137,8 +129,28 @@ impl Clone for TemplateData {
     }
 }
 
-pub trait Template: Send + Sync + 'static {
-    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateData>);
+pub struct Template<T> {
+    label: T,
+    build_fn: Box<dyn Fn(&mut App, &mut Vec<TemplateInfo>) + Send + Sync>,
+}
+
+impl<T> Template<T> {
+    pub fn new<Marker>(label: T, template: impl IntoTemplateData<Marker>) -> Self
+    where
+        T: Component,
+    {
+        let info = template.into_template();
+        Self {
+            label,
+            build_fn: Box::new(move |app, data| {
+                info.build::<T>(app, data);
+            }),
+        }
+    }
+}
+
+pub trait TemplateData: Send + Sync + 'static {
+    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateInfo>);
 }
 
 pub struct FunctionData<F, Marker> {
@@ -146,14 +158,14 @@ pub struct FunctionData<F, Marker> {
     _marker: PhantomData<Marker>,
 }
 
-impl<F, C, Marker> Template for FunctionData<F, Marker>
+impl<F, C, Marker> TemplateData for FunctionData<F, Marker>
 where
     F: SystemParamFunction<Marker, In = Entity, Out = C>,
     for<'w, 's> SystemParamItem<'w, 's, F::Param>: IsChanged,
     C: Component,
     Marker: Send + Sync + 'static,
 {
-    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateData>) {
+    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateInfo>) {
         let f = self.f.clone();
 
         let system = move |mut params: ParamSet<(
@@ -181,7 +193,7 @@ where
             }
         };
 
-        data.push(TemplateData {
+        data.push(TemplateInfo {
             system: Box::new(SystemParamFunctionData {
                 f: system,
                 _marker: PhantomData,
@@ -196,20 +208,20 @@ where
     }
 }
 
-impl<T1: Template, T2: Template> Template for (T1, T2) {
-    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateData>) {
+impl<T1: TemplateData, T2: TemplateData> TemplateData for (T1, T2) {
+    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateInfo>) {
         self.0.build::<T>(app, data);
         self.1.build::<T>(app, data);
     }
 }
 
-pub trait IntoTemplate<Marker> {
-    type Data: Template;
+pub trait IntoTemplateData<Marker> {
+    type Data: TemplateData;
 
     fn into_template(self) -> Self::Data;
 }
 
-impl<F, C, Marker> IntoTemplate<fn(Marker)> for F
+impl<F, C, Marker> IntoTemplateData<fn(Marker)> for F
 where
     F: SystemParamFunction<Marker, In = Entity, Out = C>,
     for<'w, 's> SystemParamItem<'w, 's, F::Param>: IsChanged,
@@ -233,14 +245,14 @@ pub struct EmptyFunctionData<F, Marker> {
     _marker: PhantomData<Marker>,
 }
 
-impl<F, C, Marker> Template for EmptyFunctionData<F, Marker>
+impl<F, C, Marker> TemplateData for EmptyFunctionData<F, Marker>
 where
     F: SystemParamFunction<Marker, In = (), Out = C>,
     F::Param: 'static,
     C: Component,
     Marker: Send + Sync + 'static,
 {
-    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateData>) {
+    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateInfo>) {
         let f = self.f.clone();
 
         let system = move |mut params: ParamSet<(
@@ -259,7 +271,7 @@ where
             }
         };
 
-        data.push(TemplateData {
+        data.push(TemplateInfo {
             system: Box::new(SystemParamFunctionData {
                 f: system,
                 _marker: PhantomData,
@@ -270,7 +282,7 @@ where
     }
 }
 
-impl<F, C, Marker> IntoTemplate<Empty<Marker>> for F
+impl<F, C, Marker> IntoTemplateData<Empty<Marker>> for F
 where
     F: SystemParamFunction<Marker, In = (), Out = C>,
     F::Param: 'static,
@@ -287,10 +299,10 @@ where
     }
 }
 
-impl<T1, T2, Marker1, Marker2> IntoTemplate<(Marker1, Marker2)> for (T1, T2)
+impl<T1, T2, Marker1, Marker2> IntoTemplateData<(Marker1, Marker2)> for (T1, T2)
 where
-    T1: IntoTemplate<Marker1>,
-    T2: IntoTemplate<Marker2>,
+    T1: IntoTemplateData<Marker1>,
+    T2: IntoTemplateData<Marker2>,
 {
     type Data = (T1::Data, T2::Data);
 

@@ -18,15 +18,15 @@
 <br />
 
 
-Reactive ECS plugin for Bevy.
+Reactive bundle template plugin for Bevy.
 
-This crate provides a framework for reactive systems using the ECS.
+This crate provides a framework for parallel reactive systems using the ECS.
 
 ```rust
 use bevy::prelude::*;
-use bevy_compose::TemplatePlugin;
+use bevy_compose::{Template, TemplatePlugin};
 
-#[derive(Component, Deref)]
+#[derive(Clone, Copy, PartialEq, Component, Deref)]
 struct Health(i32);
 
 #[derive(Component, Deref)]
@@ -37,7 +37,7 @@ struct Zombie;
 
 fn main() {
     App::new()
-        .add_plugins(TemplatePlugin::default().with_template(
+        .add_plugins(TemplatePlugin::default().add(Template::new(
             // Spawning a Zombie will spawn the following components:
             Zombie,
             (
@@ -50,7 +50,7 @@ fn main() {
                     Damage(**health * 2)
                 },
             ),
-        ))
+        )))
         .add_systems(Startup, setup)
         .add_systems(PostUpdate, debug)
         .run();
@@ -63,6 +63,7 @@ fn setup(mut commands: Commands) {
 fn debug(query: Query<&Damage>) {
     for dmg in &query {
         dbg!(**dmg);
+        // 200.
     }
 }
 ```
