@@ -1,13 +1,14 @@
 use bevy::{
     ecs::{
-        query::{QueryData, QueryFilter, WorldQuery},
-        schedule::SystemConfigs,
-        system::SystemParamItem,
+        component::ComponentId,
+        query::{FilteredAccess, QueryData, QueryFilter, WorldQuery},
+        system::{SystemParam, SystemParamItem, SystemState},
     },
     prelude::*,
+    utils::intern::Interned,
 };
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     marker::PhantomData,
     ops::Deref,
     sync::{Arc, Mutex},
@@ -15,7 +16,7 @@ use std::{
 
 #[derive(Default)]
 pub struct TemplatePlugin {
-    fns: Vec<Box<dyn Fn(&mut App) + Send + Sync>>,
+    template_fns: Vec<Box<dyn Fn(&mut App, &mut Vec<TemplateData>) + Send + Sync>>,
 }
 
 impl TemplatePlugin {
@@ -25,9 +26,9 @@ impl TemplatePlugin {
         template: impl IntoTemplate<Marker>,
     ) -> Self {
         let _ = label;
-        let data = template.into_template();
-        self.fns.push(Box::new(move |app| {
-            app.add_systems(Update, data.build::<T>());
+        let template = template.into_template();
+        self.template_fns.push(Box::new(move |app, data| {
+            template.build::<T>(app, data);
         }));
         self
     }
@@ -35,14 +36,109 @@ impl TemplatePlugin {
 
 impl Plugin for TemplatePlugin {
     fn build(&self, app: &mut App) {
-        for f in &self.fns {
-            f(app);
+        let templates = self
+            .template_fns
+            .iter()
+            .map(|f| {
+                let mut data = Vec::new();
+                f(app, &mut data);
+                data
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+
+        for template in &templates {
+            template.system.init(app);
+        }
+
+        for template in templates.clone() {
+            let mut after = Vec::new();
+            for other in &templates {
+                for read in &template.reads {
+                    if app.world.components().get_id(other.output).unwrap() == *read {
+                        after.push(other.system.system_set_any());
+                    }
+                }
+            }
+
+            template.system.add_any(app, after);
+        }
+    }
+}
+
+pub trait AnySystemParamFunction: Send + Sync + 'static {
+    fn clone_any(&self) -> Box<dyn AnySystemParamFunction>;
+
+    fn system_set_any(&self) -> Interned<dyn SystemSet>;
+
+    fn init(&self, app: &mut App);
+
+    fn add_any(&self, app: &mut App, after: Vec<Interned<dyn SystemSet>>);
+}
+
+struct SystemParamFunctionData<F, Marker> {
+    f: F,
+    _marker: PhantomData<Marker>,
+}
+
+impl<F: Clone, Marker> Clone for SystemParamFunctionData<F, Marker> {
+    fn clone(&self) -> Self {
+        Self {
+            f: self.f.clone(),
+            _marker: self._marker.clone(),
+        }
+    }
+}
+
+impl<Marker, F> AnySystemParamFunction for SystemParamFunctionData<F, Marker>
+where
+    F: SystemParamFunction<Marker, In = (), Out = ()> + Clone,
+    Marker: Send + Sync + 'static,
+{
+    fn clone_any(&self) -> Box<dyn AnySystemParamFunction> {
+        Box::new(self.clone())
+    }
+
+    fn system_set_any(&self) -> Interned<dyn SystemSet> {
+        self.f.clone().into_system_set().intern()
+    }
+
+    fn init(&self, app: &mut App) {
+        // TODO hack
+        let state = SystemState::<F::Param>::new(&mut World::new());
+        let meta = state.meta();
+        F::Param::init_state(&mut app.world, &mut meta.clone());
+    }
+
+    fn add_any(&self, app: &mut App, after: Vec<Interned<dyn SystemSet>>) {
+        let mut system = (apply_deferred, self.f.clone(), apply_deferred).chain();
+
+        for set in after {
+            system = system.after(set);
+        }
+
+        app.add_systems(Update, system);
+    }
+}
+
+pub struct TemplateData {
+    system: Box<dyn AnySystemParamFunction>,
+    reads: Vec<ComponentId>,
+    output: TypeId,
+}
+
+impl Clone for TemplateData {
+    fn clone(&self) -> Self {
+        Self {
+            system: self.system.clone_any(),
+            reads: self.reads.clone(),
+            output: self.output.clone(),
         }
     }
 }
 
 pub trait Template: Send + Sync + 'static {
-    fn build<T: Component>(&self) -> SystemConfigs;
+    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateData>);
 }
 
 pub struct FunctionData<F, Marker> {
@@ -53,19 +149,19 @@ pub struct FunctionData<F, Marker> {
 impl<F, C, Marker> Template for FunctionData<F, Marker>
 where
     F: SystemParamFunction<Marker, In = Entity, Out = C>,
-    for<'w, 's> SystemParamItem<'w, 's, F::Param>: IsChanged ,
+    for<'w, 's> SystemParamItem<'w, 's, F::Param>: IsChanged,
     C: Component,
     Marker: Send + Sync + 'static,
 {
-    fn build<T: Component>(&self) -> SystemConfigs {
+    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateData>) {
         let f = self.f.clone();
 
-        (move |mut params: ParamSet<(
+        let system = move |mut params: ParamSet<(
             Commands,
             Query<(Entity, Option<&mut C>), With<T>>,
             F::Param,
         )>,
-               mut cell: Local<Option<Box<dyn Any + Send>>>| {
+                           mut cell: Local<Option<Box<dyn Any + Send>>>| {
             if let Some(state) = &mut *cell {
                 if params.p2().is_changed((**state).downcast_mut().unwrap()) {
                     *cell = Some(Box::new(params.p2().build()));
@@ -83,14 +179,27 @@ where
                     params.p0().entity(entity).insert(out);
                 }
             }
+        };
+
+        data.push(TemplateData {
+            system: Box::new(SystemParamFunctionData {
+                f: system,
+                _marker: PhantomData,
+            }),
+            reads: {
+                let mut reads = Vec::new();
+                SystemParamItem::<F::Param>::reads(app, &mut reads);
+                reads
+            },
+            output: TypeId::of::<C>(),
         })
-        .into_configs()
     }
 }
 
 impl<T1: Template, T2: Template> Template for (T1, T2) {
-    fn build<T: Component>(&self) -> SystemConfigs {
-        (self.0.build::<T>(), apply_deferred, self.1.build::<T>()).into_configs()
+    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateData>) {
+        self.0.build::<T>(app, data);
+        self.1.build::<T>(app, data);
     }
 }
 
@@ -103,7 +212,7 @@ pub trait IntoTemplate<Marker> {
 impl<F, C, Marker> IntoTemplate<fn(Marker)> for F
 where
     F: SystemParamFunction<Marker, In = Entity, Out = C>,
-    for<'w, 's> SystemParamItem<'w, 's, F::Param>: IsChanged ,
+    for<'w, 's> SystemParamItem<'w, 's, F::Param>: IsChanged,
     C: Component,
     Marker: Send + Sync + 'static,
 {
@@ -131,10 +240,10 @@ where
     C: Component,
     Marker: Send + Sync + 'static,
 {
-    fn build<T: Component>(&self) -> SystemConfigs {
+    fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateData>) {
         let f = self.f.clone();
 
-        (move |mut params: ParamSet<(
+        let system = move |mut params: ParamSet<(
             Commands,
             Query<(Entity, Option<&mut C>), With<T>>,
             F::Param,
@@ -148,8 +257,16 @@ where
                     params.p0().entity(entity).insert(out);
                 }
             }
+        };
+
+        data.push(TemplateData {
+            system: Box::new(SystemParamFunctionData {
+                f: system,
+                _marker: PhantomData,
+            }),
+            reads: Vec::new(),
+            output: TypeId::of::<C>(),
         })
-        .into_configs()
     }
 }
 
@@ -187,6 +304,8 @@ pub trait IsChanged {
     where
         Self: 'w;
 
+    fn reads(app: &mut App, type_ids: &mut Vec<ComponentId>);
+
     fn build<'w>(&'w self) -> Self::State<'w>;
 
     fn is_changed<'w>(&'w self, state: &'w mut Self::State<'w>) -> bool;
@@ -202,6 +321,13 @@ where
 {
     type State<'w> =  Vec<<<<D as QueryData>::ReadOnly as WorldQuery>::Item<'w> as Deref>::Target>where Self: 'w;
 
+    fn reads(app: &mut App, type_ids: &mut Vec<ComponentId>) {
+        let mut state = D::init_state(&mut app.world);
+        let mut access = FilteredAccess::default();
+        D::update_component_access(&mut state, &mut access);
+        type_ids.extend(access.access().reads());
+    }
+
     fn build<'w>(&'w self) -> Self::State<'w> {
         self.iter().map(|x| (*x).clone()).collect()
     }
@@ -209,17 +335,21 @@ where
     fn is_changed<'w>(&'w self, state: &'w mut Self::State<'w>) -> bool {
         // TODO
         let new_state = self.build();
-        dbg!(if new_state != *state {
+        if new_state != *state {
             *state = new_state;
             true
         } else {
             false
-        })
+        }
     }
 }
 
 impl<T: IsChanged> IsChanged for (T,) {
     type State<'w> = T::State<'w>where Self: 'w;
+
+    fn reads(app: &mut App, type_ids: &mut Vec<ComponentId>) {
+        T::reads(app, type_ids);
+    }
 
     fn build<'w>(&'w self) -> Self::State<'w> {
         self.0.build()
@@ -227,25 +357,5 @@ impl<T: IsChanged> IsChanged for (T,) {
 
     fn is_changed<'w>(&'w self, state: &'w mut Self::State<'w>) -> bool {
         self.0.is_changed(state)
-    }
-}
-
-fn react<Marker, S>(
-    mut system: S,
-) -> impl FnMut(ParamSet<(S::Param,)>, Local<Option<Box<dyn Any + Send>>>)
-where
-    S: SystemParamFunction<Marker, In = ()>,
-    for<'w, 's> SystemParamItem<'w, 's, S::Param>: IsChanged,
-{
-    move |mut params, mut cell| {
-        if let Some(state) = &mut *cell {
-            if params.p0().is_changed((**state).downcast_mut().unwrap()) {
-                *cell = Some(Box::new(params.p0().build()));
-                system.run((), params.p0());
-            }
-        } else {
-            *cell = Some(Box::new(params.p0().build()));
-            system.run((), params.p0());
-        }
     }
 }

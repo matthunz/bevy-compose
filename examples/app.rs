@@ -13,9 +13,12 @@ struct Zombie;
 fn main() {
     App::new()
         .add_plugins(TemplatePlugin::default().with_template(
+            // Spawning a Zombie will spawn the following components:
             Zombie,
             (
+                // This only runs once.
                 || Health(100),
+                // This runs every time a `Health` component is updated.
                 |entity: In<Entity>, health_query: Query<&Health>| {
                     let health = health_query.get(*entity).unwrap();
                     Damage(**health * 2)
