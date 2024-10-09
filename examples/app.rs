@@ -18,7 +18,9 @@ fn main() {
             (
                 // This only runs once.
                 || Health(100),
-                // This runs every time a `Health` component is updated.
+                
+                // This runs every time a `Health` component is updated,
+                // and it's guraranteed to run after the `Health` component is updated.
                 |entity: In<Entity>, health_query: Query<&Health>| {
                     let health = health_query.get(*entity).unwrap();
                     Damage(**health * 2)
