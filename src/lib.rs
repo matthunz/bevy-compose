@@ -14,13 +14,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+type TemplateFn = Box<dyn Fn(&mut App, &mut Vec<TemplateInfo>) + Send + Sync>;
+
 #[derive(Default)]
 pub struct TemplatePlugin {
-    template_fns: Vec<Box<dyn Fn(&mut App, &mut Vec<TemplateInfo>) + Send + Sync>>,
+    template_fns: Vec<TemplateFn>,
 }
 
 impl TemplatePlugin {
-    pub fn add<T>(mut self, template: Template<T>) -> Self {
+    pub fn add_template<T>(mut self, template: Template<T>) -> Self {
         self.template_fns.push(template.build_fn);
         self
     }
@@ -31,12 +33,11 @@ impl Plugin for TemplatePlugin {
         let templates = self
             .template_fns
             .iter()
-            .map(|f| {
+            .flat_map(|f| {
                 let mut data = Vec::new();
                 f(app, &mut data);
                 data
             })
-            .flatten()
             .collect::<Vec<_>>();
 
         for template in &templates {
@@ -77,7 +78,7 @@ impl<F: Clone, Marker> Clone for SystemParamFunctionData<F, Marker> {
     fn clone(&self) -> Self {
         Self {
             f: self.f.clone(),
-            _marker: self._marker.clone(),
+            _marker: self._marker,
         }
     }
 }
@@ -124,14 +125,16 @@ impl Clone for TemplateInfo {
         Self {
             system: self.system.clone_any(),
             reads: self.reads.clone(),
-            output: self.output.clone(),
+            output: self.output,
         }
     }
 }
 
+type BuildFn = Box<dyn Fn(&mut App, &mut Vec<TemplateInfo>) + Send + Sync>;
+
 pub struct Template<T> {
-    label: T,
-    build_fn: Box<dyn Fn(&mut App, &mut Vec<TemplateInfo>) + Send + Sync>,
+    _label: T,
+    build_fn: BuildFn,
 }
 
 impl<T> Template<T> {
@@ -141,7 +144,7 @@ impl<T> Template<T> {
     {
         let info = template.into_template();
         Self {
-            label,
+            _label: label,
             build_fn: Box::new(move |app, data| {
                 info.build::<T>(app, data);
             }),
@@ -168,11 +171,7 @@ where
     fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateInfo>) {
         let f = self.f.clone();
 
-        let system = move |mut params: ParamSet<(
-            Commands,
-            Query<(Entity, Option<&mut C>), With<T>>,
-            F::Param,
-        )>,
+        let system = move |mut params: ParamSet<FunctionParams<C, T, F::Param>>,
                            mut cell: Local<Option<Box<dyn Any + Send>>>| {
             if let Some(state) = &mut *cell {
                 if params.p2().is_changed((**state).downcast_mut().unwrap()) {
@@ -253,13 +252,10 @@ where
     Marker: Send + Sync + 'static,
 {
     fn build<T: Component>(&self, app: &mut App, data: &mut Vec<TemplateInfo>) {
+        let _ = app;
         let f = self.f.clone();
 
-        let system = move |mut params: ParamSet<(
-            Commands,
-            Query<(Entity, Option<&mut C>), With<T>>,
-            F::Param,
-        )>| {
+        let system = move |mut params: ParamSet<FunctionParams<C, T, F::Param>>| {
             let entities: Vec<_> = params.p1().iter().map(|(entity, _)| entity).collect();
             for entity in entities {
                 let out = f.lock().unwrap().run((), params.p2());
@@ -318,7 +314,7 @@ pub trait IsChanged {
 
     fn reads(app: &mut App, type_ids: &mut Vec<ComponentId>);
 
-    fn build<'w>(&'w self) -> Self::State<'w>;
+    fn build(&self) -> Self::State<'_>;
 
     fn is_changed<'w>(&'w self, state: &'w mut Self::State<'w>) -> bool;
 }
@@ -334,13 +330,13 @@ where
     type State<'w> =  Vec<<<<D as QueryData>::ReadOnly as WorldQuery>::Item<'w> as Deref>::Target>where Self: 'w;
 
     fn reads(app: &mut App, type_ids: &mut Vec<ComponentId>) {
-        let mut state = D::init_state(&mut app.world);
+        let state = D::init_state(&mut app.world);
         let mut access = FilteredAccess::default();
-        D::update_component_access(&mut state, &mut access);
+        D::update_component_access(&state, &mut access);
         type_ids.extend(access.access().reads());
     }
 
-    fn build<'w>(&'w self) -> Self::State<'w> {
+    fn build(&self) -> Self::State<'_> {
         self.iter().map(|x| (*x).clone()).collect()
     }
 
@@ -363,7 +359,7 @@ impl<T: IsChanged> IsChanged for (T,) {
         T::reads(app, type_ids);
     }
 
-    fn build<'w>(&'w self) -> Self::State<'w> {
+    fn build(&self) -> Self::State<'_> {
         self.0.build()
     }
 
@@ -371,3 +367,9 @@ impl<T: IsChanged> IsChanged for (T,) {
         self.0.is_changed(state)
     }
 }
+
+type FunctionParams<C, T, P> = (
+    Commands<'static, 'static>,
+    Query<'static, 'static, (Entity, Option<&'static mut C>), With<T>>,
+    P,
+);

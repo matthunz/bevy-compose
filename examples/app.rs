@@ -12,7 +12,7 @@ struct Zombie;
 
 fn main() {
     App::new()
-        .add_plugins(TemplatePlugin::default().add(Template::new(
+        .add_plugins(TemplatePlugin::default().add_template(Template::new(
             // Spawning a Zombie will spawn the following components:
             Zombie,
             (
